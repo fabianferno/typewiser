@@ -71,6 +71,51 @@ struct FakeContext: ContextReading {
     func read() -> RewriteContext { .empty }
 }
 
+/// Rewriter that records every `RewriteContext` it was handed, in addition
+/// to producing a fixed result. Used to prove `DictationSession` passes the
+/// factory's CURRENT output through to the rewriter on each cycle, not a
+/// value captured once. `@unchecked Sendable` class like `FakeAudio`/
+/// `FakeWhisper` above: mutated only from the sequentially-awaited
+/// begin()/end() calls in a single test, never concurrently.
+final class RecordingRewriter: Rewriter, @unchecked Sendable {
+    let result: Result<String, RewriteError>
+    private(set) var receivedContexts: [RewriteContext] = []
+
+    init(result: Result<String, RewriteError> = .success("ok")) {
+        self.result = result
+    }
+
+    func rewrite(_ t: String, options: RewriteOptions, context: RewriteContext) async throws -> String {
+        receivedContexts.append(context)
+        return try result.get()
+    }
+}
+
+/// A `ContextReading` that always reads back whatever `value` was at
+/// construction. Paired with `FakeContextFactory` below so each factory
+/// invocation can hand back a different, independent snapshot.
+private struct ClosureContext: ContextReading {
+    let value: RewriteContext
+    func read() -> RewriteContext { value }
+}
+
+/// Counts how many times its `make()` factory method is invoked and lets a
+/// test change what it vends between calls. This is the crux of the
+/// regression test for the `context:` factory fix: `AXContextReader`
+/// captures `nameDictionary` at construction, so `DictationSession` must
+/// call the factory FRESH on every `end()` rather than reuse one instance
+/// captured at `init` — otherwise a name added in Settings mid-session would
+/// never reach the rewriter without an app restart.
+final class FakeContextFactory: @unchecked Sendable {
+    private(set) var callCount = 0
+    var current: RewriteContext = .empty
+
+    func make() -> ContextReading {
+        callCount += 1
+        return ClosureContext(value: current)
+    }
+}
+
 private func makeSession(audio: FakeAudio = FakeAudio(),
                          whisper: FakeWhisper = FakeWhisper(),
                          rewriter: Rewriter = FakeRewriter(result: .success("Let's meet at 3.")),
@@ -228,4 +273,49 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
     #expect(sawError, "begin() must surface a microphone failure as .error")
     #expect(keys.sent == 0, "nothing should ever be injected when the mic never started")
     #expect(pb.log.isEmpty, "nothing should ever be injected when the mic never started")
+}
+
+// MARK: - `context:` factory freshness
+//
+// `DictationSession.init` takes `context: @escaping @Sendable () ->
+// ContextReading` — a factory — specifically so `AppModel` can pass
+// `{ AXContextReader(nameDictionary: settings.nameDictionary) }` and have
+// each dictation cycle see the LATEST name dictionary. `AXContextReader`
+// captures `nameDictionary` at construction, so a frozen `ContextReading`
+// instance (the pre-fix shape) would freeze the dictionary at whatever it
+// was when the session was built, requiring an app restart for a newly
+// added name to take effect. This test fails if `context:` is ever reverted
+// to a frozen instance: it asserts both that the factory is invoked once
+// per `end()` (not once ever) and that the rewriter receives the factory's
+// CURRENT output on the second cycle, not the first cycle's snapshot.
+@Test func contextFactoryIsInvokedFreshEachCycle() async {
+    let factory = FakeContextFactory()
+    factory.current = RewriteContext(nameDictionary: ["Ada"])
+    let rewriter = RecordingRewriter()
+    let pb = FakePasteboard(), keys = FakeKeys()
+    let s = DictationSession(
+        audio: FakeAudio(),
+        whisper: FakeWhisper(),
+        rewriter: { rewriter },
+        context: { factory.make() },
+        injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1)),
+        options: { .default }
+    )
+
+    await s.begin()
+    await s.end()
+
+    // Change what the factory vends *between* cycles, mimicking a user
+    // adding a name in Settings mid-session.
+    factory.current = RewriteContext(nameDictionary: ["Grace"])
+
+    await s.begin()
+    await s.end()
+
+    #expect(factory.callCount == 2, "the factory must be invoked once per end(), not captured once at init")
+    #expect(rewriter.receivedContexts.count == 2)
+    #expect(rewriter.receivedContexts.first?.nameDictionary == ["Ada"],
+            "the first cycle should see the factory's output at that time")
+    #expect(rewriter.receivedContexts.last?.nameDictionary == ["Grace"],
+            "the second cycle must see the UPDATED factory output, not a value frozen at session construction")
 }

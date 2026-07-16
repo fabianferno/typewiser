@@ -77,8 +77,12 @@ struct SettingsView: View {
                 }
                 .disabled(accessKey.isEmpty || secretKey.isEmpty)
                 Button("Delete") {
-                    try? credentials.delete()
-                    savedMessage = "Deleted."
+                    do {
+                        try credentials.delete()
+                        savedMessage = "Deleted."
+                    } catch {
+                        savedMessage = "Failed: \(error)"
+                    }
                 }
                 Text(savedMessage).font(.caption).foregroundStyle(.secondary)
             }
