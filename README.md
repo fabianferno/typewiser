@@ -21,21 +21,40 @@ persist a grant for it across relaunches.
 
 ## Setup
 
-1. **System Settings → Keyboard → "Press 🌐 key to" → Do Nothing.** Otherwise
-   the emoji picker opens every time you dictate instead of TypeWiser seeing
-   the key. The app's Setup tab checks this for you by reading the
-   `AppleFnUsageType` key from `com.apple.HIToolbox` and shows a pass/fail
-   indicator — it does not just take your word for it.
-2. Grant Accessibility and Microphone when prompted.
-3. For Cloud mode, add AWS credentials in Settings → Cloud. They are stored in
-   the macOS Keychain (service `xyz.crevn.typewiser`) and are never written to
-   UserDefaults, a plist, a dotfile, or this repo. **Cloud mode requires this
-   step** — switching to Cloud immediately kills the local `llama-server`, so
-   without saved credentials there is no rewriter to fall back to. The menu
-   bar says so plainly (`Cloud · no credentials — add them in Settings`
-   instead of the model name) and the HUD adds a note on every dictation;
-   your words are never lost either way — they're just pasted raw, unedited,
-   until credentials are added.
+**Run this once**, before your first build:
+
+```bash
+./Scripts/create-signing-cert.sh   # creates a stable "TypeWiser Dev" signing identity
+./Scripts/bundle-app.sh
+open build/TypeWiser.app
+```
+
+Why: macOS ties Accessibility permission to the code signature. An ad-hoc
+signature is identified by a hash of the exact binary, so **every rebuild would
+silently void your granted permission** — System Settings keeps showing the
+checkbox ON while the app is untrusted. The certificate makes the grant stick.
+
+Then:
+
+1. **Grant Accessibility** when prompted. Without it, dictation is disabled
+   entirely: the 🌐 key is never observed, and the ⌘V used to paste your text
+   is silently dropped.
+2. **System Settings → Keyboard → "Press 🌐 key to" → Do Nothing.** Otherwise
+   the emoji picker opens every time you dictate.
+3. For Cloud mode, add AWS credentials in Settings → Cloud (stored in your
+   macOS Keychain).
+
+### If the app says permission is missing after you granted it
+
+You almost certainly have a stale entry bound to an older binary. Toggling it
+off/on will NOT help — it re-grants a binary that no longer exists:
+
+```bash
+tccutil reset Accessibility xyz.crevn.typewiser
+open build/TypeWiser.app     # grant again when prompted
+```
+
+This should not recur once you're signing with the certificate above.
 
 ## Engine modes
 
