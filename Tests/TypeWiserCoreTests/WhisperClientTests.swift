@@ -2,74 +2,45 @@ import Foundation
 import Testing
 @testable import TypeWiserCore
 
-/// Swift 6's "sending parameter" checker flags any `Task { self... }` closure
-/// inside an overridden `URLProtocol` method — even with `self` declared
-/// `@unchecked Sendable` — because it treats the method receiver specially.
-/// Boxing the reference sidesteps that specific heuristic without weakening
-/// concurrency checking anywhere else.
-private struct UnsafeBox<T>: @unchecked Sendable { let value: T }
-
-/// Intercepts URLSession traffic so tests never touch the network.
-final class MockProtocol: URLProtocol, @unchecked Sendable {
-    nonisolated(unsafe) static var handler: (@Sendable (URLRequest) async -> (Int, Data))?
-    nonisolated(unsafe) static var requestCount = 0
-
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for r: URLRequest) -> URLRequest { r }
-    override func stopLoading() {}
-
-    override func startLoading() {
-        MockProtocol.requestCount += 1
-        let req = request
-        let box = UnsafeBox(value: self)
-        Task {
-            let (code, data) = await (MockProtocol.handler?(req) ?? (200, Data()))
-            let resp = HTTPURLResponse(url: req.url!, statusCode: code, httpVersion: nil, headerFields: nil)!
-            let this = box.value
-            this.client?.urlProtocol(this, didReceive: resp, cacheStoragePolicy: .notAllowed)
-            this.client?.urlProtocol(this, didLoad: data)
-            this.client?.urlProtocolDidFinishLoading(this)
-        }
-    }
-}
-
-/// `MockProtocol.handler` / `.requestCount` are process-global mutable state
-/// shared by every test below. Swift Testing runs `@Test` functions in a suite
-/// concurrently by default, which would let tests stomp on each other's
-/// handler/counter; `.serialized` forces them to run one at a time so each
-/// test's `makeClient` setup is observed only by that test.
-@Suite(.serialized)
+/// `MockProtocol` (see Support/MockProtocol.swift) keys its handler and
+/// request counter per test id, generated fresh per test below via `UUID`.
+/// That means no state is shared across tests — including tests in other
+/// suites (e.g. `LocalLlamaRewriterTests`) that Swift Testing may schedule
+/// concurrently with this one — so no `.serialized` trait is needed here.
 struct WhisperClientTests {
-    private func makeClient(delay: Duration = .zero, body: String = #"{"text":" hello world\n"}"#) -> WhisperClient {
-        MockProtocol.requestCount = 0
-        MockProtocol.handler = { _ in
+    private func makeClient(delay: Duration = .zero,
+                            body: String = #"{"text":" hello world\n"}"#) -> (client: WhisperClient, id: String) {
+        let id = UUID().uuidString
+        let session = MockProtocol.makeSession(id: id) { _ in
             if delay != .zero { try? await Task.sleep(for: delay) }
             return (200, Data(body.utf8))
         }
-        let cfg = URLSessionConfiguration.ephemeral
-        cfg.protocolClasses = [MockProtocol.self]
-        return WhisperClient(endpoint: URL(string: "https://example.test/inference")!,
-                             session: URLSession(configuration: cfg))
+        let client = WhisperClient(endpoint: URL(string: "https://example.test/inference")!,
+                                   session: session)
+        return (client, id)
     }
 
     @Test func trimsLeadingSpaceAndTrailingNewline() async throws {
-        let c = makeClient()
+        let (c, id) = makeClient()
+        defer { MockProtocol.unregister(id: id) }
         let text = try await c.transcribe(pcm16: [0, 1, 2])
         #expect(text == "hello world")
     }
 
     @Test func tryTranscribeReturnsNilWhileBusy() async throws {
-        let c = makeClient(delay: .milliseconds(400))
+        let (c, id) = makeClient(delay: .milliseconds(400))
+        defer { MockProtocol.unregister(id: id) }
         async let first = c.transcribe(pcm16: [0])
         try await Task.sleep(for: .milliseconds(50))
         let second = try await c.tryTranscribe(pcm16: [0])
         #expect(second == nil, "interim must skip, never queue — the server has one slot")
         _ = try await first
-        #expect(MockProtocol.requestCount == 1)
+        #expect(MockProtocol.requestCount(id: id) == 1)
     }
 
     @Test func transcribeCancelsInFlightInterim() async throws {
-        let c = makeClient(delay: .milliseconds(400))
+        let (c, id) = makeClient(delay: .milliseconds(400))
+        defer { MockProtocol.unregister(id: id) }
         async let interim: String? = c.tryTranscribe(pcm16: [0])
         try await Task.sleep(for: .milliseconds(50))
         let final = try await c.transcribe(pcm16: [1])
@@ -78,24 +49,24 @@ struct WhisperClientTests {
     }
 
     @Test func throwsOnNon200() async throws {
-        MockProtocol.handler = { _ in (503, Data()) }
-        let cfg = URLSessionConfiguration.ephemeral
-        cfg.protocolClasses = [MockProtocol.self]
+        let id = UUID().uuidString
+        let session = MockProtocol.makeSession(id: id) { _ in (503, Data()) }
+        defer { MockProtocol.unregister(id: id) }
         let c = WhisperClient(endpoint: URL(string: "https://example.test/inference")!,
-                              session: URLSession(configuration: cfg))
+                              session: session)
         await #expect(throws: WhisperError.self) { try await c.transcribe(pcm16: [0]) }
     }
 
     @Test func bodyIsMultipartWithWavFile() async throws {
+        let id = UUID().uuidString
         nonisolated(unsafe) var seenType = ""
-        MockProtocol.handler = { req in
+        let session = MockProtocol.makeSession(id: id) { req in
             seenType = req.value(forHTTPHeaderField: "Content-Type") ?? ""
             return (200, Data(#"{"text":" ok\n"}"#.utf8))
         }
-        let cfg = URLSessionConfiguration.ephemeral
-        cfg.protocolClasses = [MockProtocol.self]
+        defer { MockProtocol.unregister(id: id) }
         let c = WhisperClient(endpoint: URL(string: "https://example.test/inference")!,
-                              session: URLSession(configuration: cfg))
+                              session: session)
         _ = try await c.transcribe(pcm16: [0])
         #expect(seenType.hasPrefix("multipart/form-data; boundary="))
     }
@@ -110,7 +81,8 @@ struct WhisperClientTests {
     /// against a server with exactly one inference slot, exactly the bug single-flight
     /// exists to prevent.
     @Test func staleCancelledRunMustNotClearNewerInFlight() async throws {
-        let c = makeClient(delay: .milliseconds(300))
+        let (c, id) = makeClient(delay: .milliseconds(300))
+        defer { MockProtocol.unregister(id: id) }
 
         // t=0: interim starts, holds the one slot.
         async let interim: String? = c.tryTranscribe(pcm16: [0])
@@ -129,6 +101,6 @@ struct WhisperClientTests {
 
         #expect(try await final == "hello world")
         _ = try? await interim
-        #expect(MockProtocol.requestCount == 2, "the probe at t=320ms must have been skipped, not started as a third request")
+        #expect(MockProtocol.requestCount(id: id) == 2, "the probe at t=320ms must have been skipped, not started as a third request")
     }
 }
