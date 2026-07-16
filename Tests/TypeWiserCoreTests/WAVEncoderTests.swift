@@ -5,13 +5,6 @@ import Testing
 private func str(_ d: Data, _ r: Range<Int>) -> String {
     String(decoding: d[r], as: UTF8.self)
 }
-private func u32(_ d: Data, _ o: Int) -> UInt32 {
-    let b0 = UInt32(d[o])
-    let b1 = UInt32(d[o + 1]) << 8
-    let b2 = UInt32(d[o + 2]) << 16
-    let b3 = UInt32(d[o + 3]) << 24
-    return b0 | b1 | b2 | b3
-}
 
 @Test func headerIsCanonical44ByteRIFF() {
     let data = WAVEncoder.encode(pcm16: [1, -1, 2, -2])
@@ -39,10 +32,17 @@ private func u32(_ d: Data, _ o: Int) -> UInt32 {
 @Test func sizeFieldsMatchPayload() {
     let data = WAVEncoder.encode(pcm16: Array(repeating: 0, count: 100))
     let dataBytes = 200
-    // data chunk size at offset 40
-    #expect(Int(data[40]) | Int(data[41]) << 8 == dataBytes)
-    // RIFF size at offset 4 == 36 + dataBytes
-    #expect(Int(data[4]) | Int(data[5]) << 8 == 36 + dataBytes)
+    // data chunk size at offset 40 (all 4 bytes of the 32-bit little-endian field)
+    #expect(data[40] == UInt8(dataBytes & 0xFF))
+    #expect(data[41] == UInt8((dataBytes >> 8) & 0xFF))
+    #expect(data[42] == UInt8((dataBytes >> 16) & 0xFF))
+    #expect(data[43] == UInt8((dataBytes >> 24) & 0xFF))
+    // RIFF size at offset 4 == 36 + dataBytes (all 4 bytes)
+    let riffSize = 36 + dataBytes
+    #expect(data[4] == UInt8(riffSize & 0xFF))
+    #expect(data[5] == UInt8((riffSize >> 8) & 0xFF))
+    #expect(data[6] == UInt8((riffSize >> 16) & 0xFF))
+    #expect(data[7] == UInt8((riffSize >> 24) & 0xFF))
 }
 
 @Test func samplesAreLittleEndian() {
@@ -56,4 +56,12 @@ private func u32(_ d: Data, _ o: Int) -> UInt32 {
     let data = WAVEncoder.encode(pcm16: [])
     #expect(data.count == 44)
     #expect(str(data, 0..<4) == "RIFF")
+}
+
+@Test func nonDefaultSampleRateIsReflectedInHeader() {
+    let data = WAVEncoder.encode(pcm16: [0, 0], sampleRate: 8000)
+    // sampleRate 8000 = 0x1F40 little-endian
+    #expect(data[24] == 0x40 && data[25] == 0x1F && data[26] == 0 && data[27] == 0)
+    // byteRate = 8000 * 1 channel * 2 bytes/sample = 16000 = 0x3E80
+    #expect(data[28] == 0x80 && data[29] == 0x3E && data[30] == 0 && data[31] == 0)
 }
