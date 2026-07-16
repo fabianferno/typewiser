@@ -101,6 +101,69 @@ public enum RewritePrompt {
             if s == before { break }
         }
 
-        return s.isEmpty ? fallback : s
+        guard !s.isEmpty else { return fallback }
+        return isPlausibleRewrite(output: s, of: fallback) ? s : fallback
+    }
+
+    /// Minimum number of transcript (input) tokens before the plausibility guard kicks
+    /// in. Short transcripts are statistically noisy — a legitimate rewrite of a two- or
+    /// three-word transcript can swing to 0% or 100% grounded purely from one word
+    /// changing form — so below this length we trust the model rather than risk
+    /// rejecting a real, short rewrite.
+    private static let minimumTranscriptTokensForGuard = 4
+
+    /// Minimum fraction of OUTPUT tokens that must also appear in the INPUT's token set
+    /// for the output to be accepted as a plausible rewrite. Tuned against
+    /// `Fixtures/golden.json` plus the confirmed Bedrock refusal text: every legitimate
+    /// rewrite in the fixture scores 0.71-1.0 grounded (filler removal and repetition
+    /// collapse are 1.0; the grammar fix "dont"/"nothing" -> "doesn't"/"anything" is the
+    /// tightest legitimate case at ~0.71, since it introduces two new word forms out of
+    /// seven output tokens); the real Nova Lite refusal scores ~0.10 grounded (its ~41
+    /// tokens share only "instructions" and three occurrences of "and" with the
+    /// transcript's 9-token vocabulary); a bare "Paris" answering a dictated question
+    /// scores 0.0. 0.5 sits with wide margin below every legitimate case observed and
+    /// well above every confirmed non-rewrite.
+    private static let minimumGroundedFraction = 0.5
+
+    /// Normalise to lowercase, punctuation-free word tokens. Punctuation (including
+    /// apostrophes and hyphens) is dropped rather than treated as a separator, so
+    /// "don't" -> "dont" and "non-harmful" -> "nonharmful" — this mirrors the fact that
+    /// a grammar fix changing word FORM ("dont" -> "doesnt") is legitimate, while
+    /// splitting on punctuation would make token boundaries fragile to no purpose here.
+    private static func tokenize(_ text: String) -> [String] {
+        var tokens: [String] = []
+        var current = ""
+        for scalar in text.lowercased().unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                current.unicodeScalars.append(scalar)
+            } else {
+                if !current.isEmpty { tokens.append(current) }
+                current = ""
+            }
+        }
+        if !current.isEmpty { tokens.append(current) }
+        return tokens
+    }
+
+    /// A cleanup rewrite must be recognisably derived from the transcript. A model can
+    /// return output that is non-empty and raises no error, yet isn't a rewrite at all —
+    /// a safety refusal, an answer to a dictated question, or unrelated hallucinated
+    /// prose. All of these introduce a flood of words that were never in the transcript,
+    /// so we measure how much of the OUTPUT is grounded in the INPUT (the fraction of
+    /// output tokens that appear in the input's token set) rather than how much of the
+    /// input survives in the output — self-correction ("meet at 2, actually 3" -> "meet
+    /// at 3") legitimately DROPS input words, and grammar fixes legitimately introduce a
+    /// handful of new word forms, so input-survival is the wrong direction to measure.
+    private static func isPlausibleRewrite(output: String, of transcript: String) -> Bool {
+        let inputTokens = tokenize(transcript)
+        guard inputTokens.count >= minimumTranscriptTokensForGuard else { return true }
+
+        let outputTokens = tokenize(output)
+        guard !outputTokens.isEmpty else { return false }
+
+        let inputSet = Set(inputTokens)
+        let groundedCount = outputTokens.filter { inputSet.contains($0) }.count
+        let fraction = Double(groundedCount) / Double(outputTokens.count)
+        return fraction >= minimumGroundedFraction
     }
 }
