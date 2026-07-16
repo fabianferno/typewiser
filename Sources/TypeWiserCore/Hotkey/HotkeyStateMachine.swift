@@ -22,6 +22,13 @@ public enum HotkeyAction: Sendable, Equatable {
 ///  - `minimumHold` — macOS users tap Fn incidentally; a tap must be inert.
 ///  - `otherKeyDown` — macOS also sets the `.function` flag for Fn+F5 and the
 ///    arrow keys, so Fn must be held *alone* to start a recording.
+///
+/// IMPORTANT — callers MUST feed periodic "still held" inputs while the key
+/// is down: macOS `flagsChanged` events only fire on transitions, so a bare
+/// hold with no intermediate input never crosses `minimumHold` and `.start`
+/// will never fire. `HotkeyMonitor` supplies these ticks via a 50ms polling
+/// `Timer`. This is not optional plumbing — without it, dictation cannot
+/// start no matter how long Fn is held.
 public struct HotkeyStateMachine: Sendable {
     private enum State: Sendable { case idle, pending(since: TimeInterval), recording, aborted }
 
