@@ -48,7 +48,9 @@ public enum RewritePrompt {
     }
 
     public static func user(_ transcript: String) -> String {
-        "Clean this transcript:\n\(transcript)"
+        // The transcript is untrusted input; fence it the same way `system()` fences
+        // `surroundingText` so it can't be mistaken for part of the instruction.
+        "Clean this transcript:\n\"\"\"\n\(transcript)\n\"\"\""
     }
 
     /// Small models wrap output in quotes, preambles and fences. Strip them.
@@ -56,25 +58,43 @@ public enum RewritePrompt {
     public static func sanitize(_ modelOutput: String, fallback: String) -> String {
         var s = modelOutput.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if s.hasPrefix("```") {
-            var lines = s.components(separatedBy: "\n")
-            lines.removeFirst()
-            if lines.last?.trimmingCharacters(in: .whitespaces).hasPrefix("```") == true { lines.removeLast() }
-            s = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        }
+        // The model may combine artifacts (e.g. a preamble wrapping a fenced block, or
+        // the whole thing wrapped in quotes), so a single fixed pass can leave one of
+        // them behind — a preamble stripped first can reveal a fence underneath, or a
+        // quote stripped first can reveal a preamble underneath. Loop to a fixed point.
+        // Capped so a pathological input can't spin forever.
+        let trimmedFallback = fallback.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackIsQuoted = trimmedFallback.count >= 2
+            && trimmedFallback.hasPrefix("\"") && trimmedFallback.hasSuffix("\"")
 
-        let lines = s.components(separatedBy: "\n")
-        if lines.count > 1 {
-            let first = lines[0].trimmingCharacters(in: .whitespaces).lowercased()
-            let isPreamble = first.hasSuffix(":")
-                && (first.hasPrefix("here") || first.hasPrefix("sure") || first.hasPrefix("cleaned"))
-            if isPreamble {
-                s = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        for _ in 0..<5 {
+            let before = s
+
+            if s.hasPrefix("```") {
+                var lines = s.components(separatedBy: "\n")
+                lines.removeFirst()
+                if lines.last?.trimmingCharacters(in: .whitespaces).hasPrefix("```") == true { lines.removeLast() }
+                s = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
             }
-        }
 
-        if s.count >= 2, s.hasPrefix("\""), s.hasSuffix("\"") {
-            s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+            let lines = s.components(separatedBy: "\n")
+            if lines.count > 1 {
+                let first = lines[0].trimmingCharacters(in: .whitespaces).lowercased()
+                let isPreamble = first.hasSuffix(":")
+                    && (first.hasPrefix("here") || first.hasPrefix("sure") || first.hasPrefix("cleaned"))
+                if isPreamble {
+                    s = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+            }
+
+            // Only strip wrapping quotes when the raw transcript wasn't itself quoted:
+            // if the user actually dictated a quotation, the fallback will be quoted
+            // too, and we keep the quotes rather than guess they're model noise.
+            if !fallbackIsQuoted, s.count >= 2, s.hasPrefix("\""), s.hasSuffix("\"") {
+                s = String(s.dropFirst().dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+
+            if s == before { break }
         }
 
         return s.isEmpty ? fallback : s
