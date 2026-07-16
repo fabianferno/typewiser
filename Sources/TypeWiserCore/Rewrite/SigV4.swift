@@ -31,6 +31,32 @@ public enum SigV4 {
             .map { String(format: "%02x", $0) }.joined()
     }
 
+    /// RFC 3986 unreserved characters — the set AWS's SigV4 URI-encoding step leaves
+    /// literal. Everything else (including `%` itself) gets percent-encoded.
+    private static let unreservedCharacters: CharacterSet = {
+        var set = CharacterSet.alphanumerics
+        set.insert(charactersIn: "-._~")
+        return set
+    }()
+
+    /// Re-encodes an already percent-encoded path for use in the canonical request.
+    ///
+    /// AWS's documented SigV4 rule ("Elements of a canonical request"): "Each path segment
+    /// must be URI-encoded twice (except for Amazon S3, which only gets URI-encoded once)."
+    /// So for Bedrock (not S3), the canonical URI is the wire path's percent-encoding
+    /// applied a SECOND time: an existing `%3A` has its `%` re-escaped to `%25`, becoming
+    /// `%253A`. Confirmed directly against AWS: a live signed request built with only a
+    /// single-encoded path (`%3A`) still got HTTP 403, and AWS's error body named the
+    /// canonical string it wanted as containing `%253A`.
+    ///
+    /// Splits on `/` and encodes each segment independently so the slash separators
+    /// themselves are never re-escaped.
+    private static func doubleEncode(path: String) -> String {
+        path.split(separator: "/", omittingEmptySubsequences: false)
+            .map { String($0).addingPercentEncoding(withAllowedCharacters: unreservedCharacters) ?? String($0) }
+            .joined(separator: "/")
+    }
+
     // NOTE: this does no URI percent-encoding of `path` and no canonical query-string
     // key/value sorting of `query` — callers are expected to pass an already-encoded
     // path and an already-canonicalized query string. That's fine for Bedrock's
@@ -86,7 +112,15 @@ public enum SigV4 {
             "content-type": "application/json",
         ]
 
-        let path = url.path.isEmpty ? "/" : url.path
+        // `URL.path` returns the percent-*decoded* path, but the wire request carries the
+        // percent-*encoded* path (e.g. a Bedrock model ID's `:` encoded as `%3A`).
+        // `URLComponents.percentEncodedPath` preserves that encoding as built into the URL.
+        //
+        // The canonical request AWS computes on its side is a SECOND encoding on top of
+        // that (see `doubleEncode` above) — the wire path itself stays singly-encoded.
+        let encodedPath = URLComponents(url: url, resolvingAgainstBaseURL: false)?.percentEncodedPath
+        let wirePath = (encodedPath?.isEmpty ?? true) ? "/" : encodedPath!
+        let path = doubleEncode(path: wirePath)
         let query = url.query ?? ""
         let cr = canonicalRequest(method: req.httpMethod ?? "POST", path: path,
                                   query: query, headers: headers, bodyHash: bodyHash)

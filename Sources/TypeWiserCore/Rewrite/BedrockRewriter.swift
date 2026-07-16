@@ -7,21 +7,22 @@ public struct BedrockRewriter: Rewriter {
     private let session: URLSession
     private let timeout: TimeInterval
 
-    /// Characters a Bedrock model ID may contain (letters, digits, `.`, `-`, `_`, `~`, `:`)
-    /// that are also legal, unescaped, in a URL path segment (RFC 3986 `pchar`).
+    /// RFC 3986 "unreserved" characters (letters, digits, `-`, `.`, `_`, `~`) — the exact
+    /// set that AWS SigV4 canonical-URI-encoding leaves literal. Everything else, including
+    /// `:`, must be percent-encoded (e.g. `apac.amazon.nova-lite-v1:0` -> `...v1%3A0`).
     ///
-    /// `SigV4.sign` builds its canonical request from `URLRequest.url!.path`, which Foundation
-    /// always returns percent-*decoded*. If we percent-encoded any of these characters here
-    /// (e.g. via `.alphanumerics`, which would escape the dots, hyphens and colon in
-    /// "apac.amazon.nova-lite-v1:0"), the signed path and the actual on-the-wire request path
-    /// (which keeps the raw percent-escapes from the URL string) would diverge, and AWS would
-    /// reject the signature. Allowing exactly the model-ID characters that don't need escaping
-    /// means `addingPercentEncoding` is a no-op for our real model ID, so the signed path and
-    /// the wire path are always byte-identical — while still defensively escaping anything
-    /// unexpected (e.g. a `/`) if a future model ID ever needed it.
+    /// `SigV4.sign` signs the URL's percent-*encoded* path (see `SigV4.swift`), so the encoded
+    /// model ID used to build the URL here and the path SigV4 signs must agree byte-for-byte
+    /// with what AWS's canonicalization expects. Previously this set also allowed `:` literal,
+    /// which produced a request path with a raw colon — AWS's servers still canonicalize that
+    /// colon to `%3A` when checking the signature, so a signer that also left it un-encoded
+    /// (as this one used to, reading `URL.path`) happened to "agree" with the URL, but neither
+    /// agreed with AWS, causing HTTP 403 on every real Bedrock request that hit an
+    /// InvokeModel model ID containing a colon (i.e. every model ID that carries a version,
+    /// which is effectively all of them).
     private static let modelIDAllowedCharacters: CharacterSet = {
         var set = CharacterSet.alphanumerics
-        set.insert(charactersIn: "-._~:")
+        set.insert(charactersIn: "-._~")
         return set
     }()
 

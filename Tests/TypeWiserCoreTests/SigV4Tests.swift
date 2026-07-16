@@ -55,6 +55,83 @@ private let creds = AWSCredentials(
     #expect(a.value(forHTTPHeaderField: "Authorization") != b.value(forHTTPHeaderField: "Authorization"))
 }
 
+// Regression test for a real production 403, root-caused and fixed against live AWS
+// (not just mocks — see task-8-fix-report.md). Two things had to be true simultaneously:
+//
+// 1. `URL.path` returns the percent-*decoded* path, but the wire request carries the
+//    percent-*encoded* path (e.g. a Bedrock model ID's `:` encoded as `%3A`). Signing the
+//    decoded form is a guaranteed mismatch against the request AWS actually receives.
+// 2. AWS's own documented SigV4 rule ("Elements of a canonical request") is that every
+//    service except S3 gets its path segments URI-encoded TWICE for the canonical
+//    request — the wire path itself stays singly-encoded. Confirmed directly against a
+//    live 403 response: AWS's error body named the canonical string it wanted as
+//    containing `%253A` (i.e. `%3A`'s `%` re-escaped to `%25`), not the singly-encoded
+//    `%3A`. A signer that used the singly-encoded path in its canonical request (as an
+//    earlier version of this fix did) still got HTTP 403 for exactly this reason.
+//
+// This pins that `sign()` builds its canonical request from the DOUBLY-encoded path.
+@Test func signUsesDoublyEncodedPathForCanonicalRequest() {
+    let url = URL(string:
+        "https://bedrock-runtime.ap-south-1.amazonaws.com/model/apac.amazon.nova-lite-v1%3A0/invoke")!
+    var req = URLRequest(url: url)
+    req.httpMethod = "POST"
+    let body = Data("{}".utf8)
+    let date = Date(timeIntervalSince1970: 1_440_938_160)
+    let signed = SigV4.sign(request: req, body: body, service: "bedrock", credentials: creds, date: date)
+
+    guard let auth = signed.value(forHTTPHeaderField: "Authorization"),
+          let sigRange = auth.range(of: "Signature=") else {
+        Issue.record("sign() did not set an Authorization header")
+        return
+    }
+    let actualSignature = String(auth[sigRange.upperBound...])
+
+    let bodyHash = SigV4.hexSHA256(body)
+    let headers = [
+        "host": "bedrock-runtime.ap-south-1.amazonaws.com",
+        "x-amz-date": "20150830T123600Z",
+        "x-amz-content-sha256": bodyHash,
+        "content-type": "application/json",
+    ]
+
+    // Reconstruct the canonical request the way `sign()` is required to build it: the wire
+    // path's `%3A` re-encoded to `%253A` (its `%` escaped to `%25`).
+    let doublyEncodedPathCR = SigV4.canonicalRequest(
+        method: "POST", path: "/model/apac.amazon.nova-lite-v1%253A0/invoke", query: "",
+        headers: headers, bodyHash: bodyHash
+    )
+    #expect(doublyEncodedPathCR.contains("%253A"))
+    #expect(!doublyEncodedPathCR.contains("v1:0"))
+
+    let scope = "20150830/\(creds.region)/bedrock/aws4_request"
+    let expectedStringToSign = [
+        "AWS4-HMAC-SHA256", "20150830T123600Z", scope, SigV4.hexSHA256(Data(doublyEncodedPathCR.utf8)),
+    ].joined(separator: "\n")
+    let expectedSignature = SigV4.signature(
+        stringToSign: expectedStringToSign, secretAccessKey: creds.secretAccessKey,
+        dateStamp: "20150830", region: creds.region, service: "bedrock"
+    )
+
+    // The signature `sign()` actually produced must match the one derived from the
+    // DOUBLY-encoded path — proving `sign()` signs `%253A`, matching AWS's own canonicalization.
+    #expect(actualSignature == expectedSignature)
+
+    // Sanity check that this test would actually catch a regression to either wrong
+    // encoding: both the decoded path and the singly-encoded path produce a different
+    // canonical request (and thus a different, non-matching signature) than the
+    // doubly-encoded one this test pins.
+    let decodedPathCR = SigV4.canonicalRequest(
+        method: "POST", path: "/model/apac.amazon.nova-lite-v1:0/invoke", query: "",
+        headers: headers, bodyHash: bodyHash
+    )
+    let singlyEncodedPathCR = SigV4.canonicalRequest(
+        method: "POST", path: "/model/apac.amazon.nova-lite-v1%3A0/invoke", query: "",
+        headers: headers, bodyHash: bodyHash
+    )
+    #expect(decodedPathCR != doublyEncodedPathCR)
+    #expect(singlyEncodedPathCR != doublyEncodedPathCR)
+}
+
 @Test func canonicalRequestHasEightLines() {
     let cr = SigV4.canonicalRequest(
         method: "POST", path: "/model/x/invoke", query: "",

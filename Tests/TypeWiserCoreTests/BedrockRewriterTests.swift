@@ -57,6 +57,29 @@ struct BedrockRewriterTests {
         #expect(seenHostHeader == "bedrock-runtime.ap-south-1.amazonaws.com")
     }
 
+    // Regression test for a real production 403: the model ID's `:` must be percent-encoded
+    // to `%3A` in the request URL's path (RFC 3986 / AWS SigV4 canonical-URI rules say `:`
+    // is not "unreserved"). `modelIDAllowedCharacters` used to also allow `:` literal, which
+    // put a raw colon on the wire — AWS's servers canonicalize that colon differently than
+    // this signer did, and rejected the signature.
+    @Test func modelIDColonIsPercentEncodedInRequestPath() async throws {
+        let id = UUID().uuidString
+        nonisolated(unsafe) var seenURL: URL?
+        let session = MockProtocol.makeSession(id: id) { req in
+            seenURL = req.url
+            return .http(200, Data(novaOK.utf8))
+        }
+        defer { MockProtocol.unregister(id: id) }
+        let r = BedrockRewriter(credentials: testCreds, session: session)
+        _ = try await r.rewrite("x", options: .default, context: .empty)
+
+        let encodedPath = seenURL.flatMap {
+            URLComponents(url: $0, resolvingAgainstBaseURL: false)?.percentEncodedPath
+        } ?? ""
+        #expect(encodedPath.contains("apac.amazon.nova-lite-v1%3A0"))
+        #expect(!encodedPath.contains("v1:0"))
+    }
+
     @Test func noOpOptionsSkipTheNetworkEntirely() async throws {
         let (r, id) = makeBedrock(body: novaOK)
         defer { MockProtocol.unregister(id: id) }
