@@ -26,6 +26,12 @@ final class AppModel {
         }
     }
     var engineState: EngineState = .stopped
+    /// Live Accessibility trust state, read at launch and refreshed once
+    /// permission is granted (see the polling `Task` in `init`). The menu
+    /// and Settings→Setup read this instead of calling
+    /// `AXIsProcessTrusted()` inline so they actually re-render when it
+    /// changes — an inline call in a view body wouldn't be observed.
+    var hasAccessibility: Bool
 
     let settings = SettingsStore()
     private let credentials = KeychainCredentialStore()
@@ -41,6 +47,8 @@ final class AppModel {
     private var hudHideTask: Task<Void, Never>?
 
     init() {
+        self.hasAccessibility = HotkeyMonitor.hasAccessibilityPermission()
+
         // A previous run that crashed or was force-quit never got to run
         // `stop()`, so its ~17GB llama-server child may still be resident.
         // Reap it before we possibly spawn a fresh one below.
@@ -97,7 +105,39 @@ final class AppModel {
 
         Task { await observePhases() }
         Task { await applyMode() }
-        monitor.start()
+
+        if hasAccessibility {
+            monitor.start()
+        } else {
+            // First launch (or permission revoked since): ask now, at
+            // launch, rather than waiting for the user to find the menu —
+            // the menu is unreachable in the first place if `monitor.start()`
+            // ever registered while untrusted (see the guard in
+            // `HotkeyMonitor.start()`). If macOS already showed this prompt
+            // once and was denied, this call is a silent no-op; the menu
+            // bar / Setup tab UI is what carries the "grant it manually in
+            // System Settings" message for that case.
+            HotkeyMonitor.requestAccessibilityPermission()
+            watchForAccessibilityGrant()
+        }
+    }
+
+    /// Polls every 2s (not tighter — there's no urgency, and this must not
+    /// spin) until Accessibility is granted, then starts the hotkey
+    /// monitor and stops polling. Safe to leave running indefinitely if the
+    /// user never grants permission during this run.
+    private func watchForAccessibilityGrant() {
+        Task { @MainActor [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self else { return }
+                if HotkeyMonitor.hasAccessibilityPermission() {
+                    self.hasAccessibility = true
+                    self.monitor.start()
+                    return
+                }
+            }
+        }
     }
 
     /// Whether Cloud mode currently has usable AWS credentials in the

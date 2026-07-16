@@ -90,5 +90,5 @@ struct SettingsView: View {
         .formStyle(.grouped)
     }
 
-    private var setupTab: some View { OnboardingView() }
+    private var setupTab: some View { OnboardingView(model: model) }
 }

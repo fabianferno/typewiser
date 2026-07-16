@@ -5,6 +5,7 @@ import TypeWiserCore
 /// Verifies setup rather than merely instructing. If the 🌐 key is still bound to
 /// dictation or the emoji picker, every hold pops a system UI over the user's work.
 struct OnboardingView: View {
+    let model: AppModel
     @State private var refresh = 0
 
     private var fnUsage: Int? {
@@ -16,10 +17,21 @@ struct OnboardingView: View {
 
     var body: some View {
         Form {
+            // Reads `model.hasAccessibility` (kept live by `AppModel`), the
+            // same source of truth `MenuBarView` uses, rather than calling
+            // `HotkeyMonitor.hasAccessibilityPermission()` inline here — this
+            // row updates the instant permission is granted, no "Re-check"
+            // needed for this one.
             check("Accessibility permission",
-                  ok: HotkeyMonitor.hasAccessibilityPermission(),
-                  detail: "Required to detect the 🌐 key and paste into other apps.") {
+                  ok: model.hasAccessibility,
+                  detail: model.hasAccessibility
+                    ? "Required to detect the 🌐 key and paste into other apps."
+                    : "Dictation is disabled without this — TypeWiser can't detect the 🌐 key or paste. If macOS already denied the prompt it won't ask again; use Fix… to open System Settings and enable it manually.") {
+                // Harmless no-op if macOS already denied the prompt once;
+                // the settings deep link is the guaranteed fallback for
+                // that case (see `HotkeyMonitor.openAccessibilitySettings`).
                 HotkeyMonitor.requestAccessibilityPermission()
+                HotkeyMonitor.openAccessibilitySettings()
             }
 
             check("🌐 key is free",

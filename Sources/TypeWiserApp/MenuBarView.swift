@@ -16,10 +16,29 @@ struct MenuBarView: View {
 
             Divider()
 
-            if !HotkeyMonitor.hasAccessibilityPermission() {
-                Button("Grant Accessibility Permission…") {
-                    HotkeyMonitor.requestAccessibilityPermission()
+            // Read from `model.hasAccessibility` (kept live by `AppModel`),
+            // never `HotkeyMonitor.hasAccessibilityPermission()` inline here —
+            // a direct call in the view body wouldn't be tracked by
+            // Observation, so the menu would never re-render when permission
+            // is granted.
+            if !model.hasAccessibility {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Dictation disabled — Accessibility required", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    Text("TypeWiser cannot detect the 🌐 key or paste text into other apps until this is granted.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Grant Accessibility Permission…") {
+                        HotkeyMonitor.requestAccessibilityPermission()
+                    }
+                    Button("Open System Settings…") {
+                        HotkeyMonitor.openAccessibilitySettings()
+                    }
+                    Text("If macOS already denied the prompt, it won't ask again — add TypeWiser under Privacy & Security → Accessibility and enable it there.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
+                Divider()
             }
             SettingsLink { Text("Settings…") }
             Button("Quit") { NSApplication.shared.terminate(nil) }
