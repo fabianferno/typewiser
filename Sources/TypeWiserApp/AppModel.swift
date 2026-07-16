@@ -64,7 +64,7 @@ final class AppModel {
                     return BedrockRewriter(credentials: c)
                 }
             },
-            context: AXContextReader(nameDictionary: settings.nameDictionary),
+            context: { AXContextReader(nameDictionary: settings.nameDictionary) },
             injector: TextInjector(),
             options: { settings.options }
         )

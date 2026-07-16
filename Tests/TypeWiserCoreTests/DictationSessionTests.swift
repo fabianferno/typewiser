@@ -81,7 +81,7 @@ private func makeSession(audio: FakeAudio = FakeAudio(),
         audio: audio,
         whisper: whisper,
         rewriter: { rewriter },
-        context: FakeContext(),
+        context: { FakeContext() },
         injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1)),
         options: { .default }
     )

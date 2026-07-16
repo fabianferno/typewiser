@@ -14,7 +14,7 @@ public actor DictationSession {
     private let audio: AudioCapturing
     private let whisper: Transcribing
     private let makeRewriter: @Sendable () -> Rewriter
-    private let context: ContextReading
+    private let makeContext: @Sendable () -> ContextReading
     private let injector: TextInjector
     private let makeOptions: @Sendable () -> RewriteOptions
 
@@ -25,13 +25,13 @@ public actor DictationSession {
     public init(audio: AudioCapturing,
                 whisper: Transcribing,
                 rewriter: @escaping @Sendable () -> Rewriter,
-                context: ContextReading,
+                context: @escaping @Sendable () -> ContextReading,
                 injector: TextInjector,
                 options: @escaping @Sendable () -> RewriteOptions) {
         self.audio = audio
         self.whisper = whisper
         self.makeRewriter = rewriter
-        self.context = context
+        self.makeContext = context
         self.injector = injector
         self.makeOptions = options
         var cont: AsyncStream<SessionPhase>.Continuation!
@@ -107,7 +107,7 @@ public actor DictationSession {
         }
 
         emit(.rewriting)
-        let ctx = context.read()
+        let ctx = makeContext().read()
         // Any rewriter failure degrades to the raw transcript. Losing the user's
         // words is never an acceptable outcome.
         let final = (try? await makeRewriter().rewrite(trimmed, options: makeOptions(), context: ctx)) ?? trimmed
