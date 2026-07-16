@@ -17,20 +17,32 @@ import Foundation
 /// tests ever share an id, there is no shared mutable state left to race on
 /// — concurrent scheduling, across suites or within one, is safe by
 /// construction rather than by requiring serialization.
+
+/// What a mock handler can produce for a given request: either a simulated
+/// HTTP response, or a simulated transport failure (e.g. the connection
+/// never got established, or timed out) — the two things `URLSession`
+/// itself can hand back to a caller.
+enum MockResponse: Sendable {
+    case http(Int, Data)
+    case failure(URLError)
+}
+
 final class MockProtocol: URLProtocol, @unchecked Sendable {
     static let testIDHeader = "X-Mock-Test-ID"
 
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var handlers: [String: @Sendable (URLRequest) async -> (Int, Data)] = [:]
+    nonisolated(unsafe) private static var handlers: [String: @Sendable (URLRequest) async -> MockResponse] = [:]
     nonisolated(unsafe) private static var counts: [String: Int] = [:]
 
-    /// Registers `handler` under `id` and returns a `URLSession` that routes
-    /// all its traffic through `MockProtocol`, tagging every outgoing
-    /// request with `id` so `startLoading()` can find this handler.
+    /// Registers `responder` under `id` and returns a `URLSession` that
+    /// routes all its traffic through `MockProtocol`, tagging every
+    /// outgoing request with `id` so `startLoading()` can find this
+    /// responder. Use this form when a test needs to simulate a transport
+    /// failure (`.failure`) rather than an HTTP response (`.http`).
     static func makeSession(id: String,
-                            handler: @escaping @Sendable (URLRequest) async -> (Int, Data)) -> URLSession {
+                            responder: @escaping @Sendable (URLRequest) async -> MockResponse) -> URLSession {
         lock.lock()
-        handlers[id] = handler
+        handlers[id] = responder
         counts[id] = 0
         lock.unlock()
 
@@ -38,6 +50,16 @@ final class MockProtocol: URLProtocol, @unchecked Sendable {
         cfg.protocolClasses = [MockProtocol.self]
         cfg.httpAdditionalHeaders = [testIDHeader: id]
         return URLSession(configuration: cfg)
+    }
+
+    /// Convenience form for the common case: a handler that only ever
+    /// produces an HTTP response. Thin wrapper over `makeSession(id:responder:)`.
+    static func makeSession(id: String,
+                            handler: @escaping @Sendable (URLRequest) async -> (Int, Data)) -> URLSession {
+        makeSession(id: id) { req in
+            let (code, data) = await handler(req)
+            return .http(code, data)
+        }
     }
 
     static func requestCount(id: String) -> Int {
@@ -57,7 +79,7 @@ final class MockProtocol: URLProtocol, @unchecked Sendable {
 
     /// Looks up the handler registered for `id` (if any), bumping its
     /// counter atomically in the same critical section as the lookup.
-    private static func lookupAndCount(id: String?) -> (@Sendable (URLRequest) async -> (Int, Data))? {
+    private static func lookupAndCount(id: String?) -> (@Sendable (URLRequest) async -> MockResponse)? {
         lock.lock()
         defer { lock.unlock() }
         guard let id, let handler = handlers[id] else { return nil }
@@ -68,14 +90,14 @@ final class MockProtocol: URLProtocol, @unchecked Sendable {
     /// Fail loudly rather than silently returning empty data: a missing
     /// handler means some request escaped its test's mock wiring, which is
     /// exactly the class of bug per-test isolation exists to catch.
-    private static func missingHandlerResponse(id: String?) -> (Int, Data) {
+    private static func missingHandlerResponse(id: String?) -> MockResponse {
         let body = """
             MockProtocol: no handler registered for test id \
             \(id ?? "<missing \(testIDHeader) header>"). \
             Requests must go through a URLSession returned by \
             MockProtocol.makeSession(id:handler:).
             """
-        return (599, Data(body.utf8))
+        return .http(599, Data(body.utf8))
     }
 
     override class func canInit(with request: URLRequest) -> Bool { true }
@@ -97,12 +119,17 @@ final class MockProtocol: URLProtocol, @unchecked Sendable {
 
         let box = UnsafeBox(value: self)
         Task {
-            let (code, data) = await (handler?(req) ?? missingHandlerFallback)
-            let resp = HTTPURLResponse(url: req.url!, statusCode: code, httpVersion: nil, headerFields: nil)!
+            let result = await (handler?(req) ?? missingHandlerFallback)
             let this = box.value
-            this.client?.urlProtocol(this, didReceive: resp, cacheStoragePolicy: .notAllowed)
-            this.client?.urlProtocol(this, didLoad: data)
-            this.client?.urlProtocolDidFinishLoading(this)
+            switch result {
+            case .http(let code, let data):
+                let resp = HTTPURLResponse(url: req.url!, statusCode: code, httpVersion: nil, headerFields: nil)!
+                this.client?.urlProtocol(this, didReceive: resp, cacheStoragePolicy: .notAllowed)
+                this.client?.urlProtocol(this, didLoad: data)
+                this.client?.urlProtocolDidFinishLoading(this)
+            case .failure(let err):
+                this.client?.urlProtocol(this, didFailWithError: err)
+            }
         }
     }
 }

@@ -65,4 +65,24 @@ struct LocalLlamaRewriterTests {
             try await r.rewrite("x", options: .default, context: .empty)
         }
     }
+
+    @Test func timedOutTransportErrorMapsToTimedOut() async throws {
+        let id = UUID().uuidString
+        let session = MockProtocol.makeSession(id: id) { _ in .failure(URLError(.timedOut)) }
+        defer { MockProtocol.unregister(id: id) }
+        let r = LocalLlamaRewriter(baseURL: URL(string: "http://127.0.0.1:8231")!, session: session)
+        await #expect(throws: RewriteError.timedOut) {
+            try await r.rewrite("x", options: .default, context: .empty)
+        }
+    }
+
+    @Test func serverUnreachableTransportErrorMapsToUnavailable() async throws {
+        let id = UUID().uuidString
+        let session = MockProtocol.makeSession(id: id) { _ in .failure(URLError(.cannotConnectToHost)) }
+        defer { MockProtocol.unregister(id: id) }
+        let r = LocalLlamaRewriter(baseURL: URL(string: "http://127.0.0.1:8231")!, session: session)
+        await #expect(throws: RewriteError.unavailable) {
+            try await r.rewrite("x", options: .default, context: .empty)
+        }
+    }
 }
