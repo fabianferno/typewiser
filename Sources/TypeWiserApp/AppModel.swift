@@ -22,6 +22,11 @@ final class AppModel {
     private let whisper = WhisperClient(endpoint: URL(string: "https://whisper.crevn.xyz/inference")!)
     private var session: DictationSession!
     private var monitor: HotkeyMonitor!
+    private let hud = HUDController()
+    /// Pending auto-hide scheduled after `.inserted`/`.error`. Cancelled the
+    /// instant another phase arrives so a new dictation started inside the
+    /// 1.5s window can't have this stale timer yank the HUD back down.
+    private var hudHideTask: Task<Void, Never>?
 
     init() {
         // A previous run that crashed or was force-quit never got to run
@@ -89,6 +94,28 @@ final class AppModel {
         let stream = await session.phaseStream
         for await p in stream {
             self.phase = p
+            hud.update(p)
+
+            // Any new phase invalidates a previously scheduled auto-hide:
+            // without this, starting a fresh dictation right after an
+            // `.inserted`/`.error` would let that stale 1.5s timer hide the
+            // HUD while the new recording is still in progress.
+            hudHideTask?.cancel()
+            hudHideTask = nil
+
+            switch p {
+            case .recording, .transcribing, .rewriting:
+                hud.show()
+            case .inserted, .error:
+                hud.show()
+                hudHideTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(1.5))
+                    guard let self, !Task.isCancelled else { return }
+                    self.hud.hide()
+                }
+            case .idle:
+                hud.hide()
+            }
         }
     }
 
