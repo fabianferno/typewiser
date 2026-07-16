@@ -31,7 +31,14 @@ public struct LocalLlamaRewriter: Rewriter {
                 ["role": "user", "content": RewritePrompt.user(transcript)],
             ],
             "temperature": 0,
-            "max_tokens": 512,
+            // This server may run a "thinking" model (e.g. Gemma reasoning variants) whose
+            // chain-of-thought is billed against this same token budget before any final
+            // `content` is emitted. 512 was observed to be too small: harder inputs (e.g. a
+            // double negative needing grammar repair) can consume 1000+ reasoning tokens
+            // before converging, leaving `content` empty and silently falling back to the
+            // raw, uncleaned transcript. 2560 leaves comfortable headroom above the ~1700
+            // tokens seen in practice for the hardest case tested.
+            "max_tokens": 2560,
             "stream": false,
         ])
 

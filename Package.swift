@@ -12,7 +12,8 @@ let package = Package(
         ),
         .testTarget(
             name: "TypeWiserCoreTests",
-            dependencies: ["TypeWiserCore"]
+            dependencies: ["TypeWiserCore"],
+            resources: [.copy("Fixtures/golden.json")]
         ),
     ]
 )
