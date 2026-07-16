@@ -11,6 +11,7 @@ public protocol AudioCapturing: Sendable {
     func start() async throws
     func stop() async
     func currentSamples() async -> [Int16]
+    func level() async -> Float
 }
 
 /// Microphone → 16kHz mono Int16, which is what whisper.cpp wants.

@@ -40,6 +40,14 @@ public actor EngineManager {
     private var process: Process?
     public private(set) var state: EngineState = .stopped
 
+    /// Bumped on every `start()`/`stop()` so a suspended `waitForHealth()` from
+    /// a previous generation can detect it is stale and never write `state`
+    /// on behalf of a generation that is no longer current. Without this, a
+    /// `stop()` that races a `start()`'s health-poll loop can let the stale
+    /// loop overwrite state that a later `start()` (or the `stop()` itself)
+    /// already set correctly.
+    private var generation = 0
+
     public init(config: EngineConfig = .gemmaDefault, session: URLSession = .shared) {
         self.config = config
         self.session = session
@@ -73,6 +81,9 @@ public actor EngineManager {
             return
         }
 
+        generation += 1
+        let myGeneration = generation
+
         state = .starting
         let p = Process()
         p.executableURL = URL(fileURLWithPath: config.binaryPath)
@@ -86,31 +97,43 @@ public actor EngineManager {
             return
         }
         process = p
-        await waitForHealth()
+        await waitForHealth(generation: myGeneration)
     }
 
     private var isFailed: Bool { if case .failed = state { return true }; return false }
 
     /// A 17GB GGUF takes 10–30s to load, so poll rather than assume.
-    private func waitForHealth() async {
+    ///
+    /// `myGeneration` pins this call to the `start()` that spawned it. If
+    /// `stop()` (or a subsequent `start()`) runs while this loop is suspended
+    /// between polls, `generation` will have moved on by the time we resume,
+    /// and every state write below is guarded on it — the loop exits instead
+    /// of reporting on behalf of a generation that is no longer current. This
+    /// also means a `nil` `process` here (set by `stop()`) is always caught
+    /// by the generation guard, never misreported as "exited during startup".
+    private func waitForHealth(generation myGeneration: Int) async {
         let url = URL(string: "http://127.0.0.1:\(config.port)/health")!
         let deadline = Date().addingTimeInterval(90)
         while Date() < deadline {
-            if process?.isRunning == false {
+            guard generation == myGeneration else { return }
+            guard let p = process, p.isRunning else {
                 state = .failed("llama-server exited during startup")
                 return
             }
             if let (_, resp) = try? await session.data(from: url),
                (resp as? HTTPURLResponse)?.statusCode == 200 {
+                guard generation == myGeneration else { return }
                 state = .ready
                 return
             }
             try? await Task.sleep(for: .seconds(1))
         }
+        guard generation == myGeneration else { return }
         state = .failed("llama-server did not become healthy within 90s")
     }
 
     public func stop() {
+        generation += 1
         process?.terminate()
         process = nil
         state = .stopped
