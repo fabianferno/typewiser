@@ -60,3 +60,25 @@ GUI interaction, and were actually run as part of this task:
   reflect a real pass.
 
 Everything else above — rows 1 through 11 in the table — requires a human.
+
+## Regression checks (found the hard way in real use)
+
+These are here because each one shipped as a real bug that no automated test
+could catch — they only exist in the gap between real permissions and a real GUI.
+
+- [ ] **With Accessibility DENIED, the menu bar icon still opens its panel.**
+      Registering `NSEvent.addGlobalMonitorForEvents` while untrusted poisons the
+      app's event delivery and the popover silently stops opening — which locked
+      the user out entirely, since that menu is the only place to grant
+      permission. `HotkeyMonitor.start()` guards on `AXIsProcessTrusted()` for
+      exactly this reason. Verify by: `tccutil reset Accessibility
+      xyz.crevn.typewiser`, relaunch, deny the prompt, then click the mic icon.
+- [ ] **The menu states plainly that dictation is disabled when untrusted**, and
+      offers a working "Open System Settings…" deep link (macOS will not re-show
+      a prompt the user already denied).
+- [ ] **After granting, the app notices within ~2s without a restart** (AppModel
+      polls, then starts the monitors).
+- [ ] **Permission survives a rebuild.** Make a real code change, run
+      `./Scripts/bundle-app.sh`, relaunch — dictation must still work. If it
+      breaks, the app fell back to ad-hoc signing; check for the warning from
+      bundle-app.sh and run `./Scripts/create-signing-cert.sh`.
