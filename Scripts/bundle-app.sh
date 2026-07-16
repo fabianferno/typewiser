@@ -14,8 +14,21 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp .build/release/TypeWiserApp "$APP/Contents/MacOS/TypeWiserApp"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
-# Ad-hoc signature keeps the TCC grant stable across rebuilds.
-codesign --force --deep --sign - "$APP"
+# macOS ties Accessibility permission to the code signature. An ad-hoc
+# signature is identified by CDHash — a hash of the exact binary — so every
+# rebuild would silently void the user's granted permission while System
+# Settings still shows the checkbox ON. Signing with a real (self-signed)
+# identity makes the designated requirement identifier+certificate, which is
+# stable across rebuilds. See Scripts/create-signing-cert.sh.
+IDENTITY="TypeWiser Dev"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "$IDENTITY"; then
+    codesign --force --deep --sign "$IDENTITY" "$APP"
+else
+    echo "WARNING: signing identity '$IDENTITY' not found — falling back to ad-hoc."
+    echo "         Accessibility permission will break on every rebuild."
+    echo "         Fix: ./Scripts/create-signing-cert.sh"
+    codesign --force --deep --sign - "$APP"
+fi
 
 echo "Built $APP"
 echo "Run: open $APP"
