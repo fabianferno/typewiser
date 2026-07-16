@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 
-public struct AWSCredentials: Sendable, Equatable {
+public struct AWSCredentials: Sendable, Equatable, Codable {
     public let accessKeyID: String
     public let secretAccessKey: String
     public let region: String
