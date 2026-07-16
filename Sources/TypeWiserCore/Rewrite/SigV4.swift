@@ -31,6 +31,12 @@ public enum SigV4 {
             .map { String(format: "%02x", $0) }.joined()
     }
 
+    // NOTE: this does no URI percent-encoding of `path` and no canonical query-string
+    // key/value sorting of `query` — callers are expected to pass an already-encoded
+    // path and an already-canonicalized query string. That's fine for Bedrock's
+    // `InvokeModel` POST (no query string, path is just a model ID segment), but a
+    // signer for other AWS services (S3, anything with query params) would need to
+    // add that encoding step here.
     static func canonicalRequest(method: String, path: String, query: String,
                                  headers: [String: String], bodyHash: String) -> String {
         let sorted = headers.map { ($0.key.lowercased(), $0.value) }.sorted { $0.0 < $1.0 }
@@ -39,6 +45,24 @@ public enum SigV4 {
         let signedHeaders = sorted.map(\.0).joined(separator: ";")
         return [method, path, query, canonicalHeaders + "\n", signedHeaders, bodyHash]
             .joined(separator: "\n")
+    }
+
+    /// Derives the AWS4 signing key (`"AWS4" + secret` → date → region → service →
+    /// `"aws4_request"`, each step an HMAC-SHA256) and uses it to HMAC the given
+    /// string-to-sign, returning the hex-encoded signature.
+    ///
+    /// Extracted as its own testable function so the signing-key derivation chain and
+    /// final signature can be pinned against AWS's published test vectors independently
+    /// of `sign()`'s header handling. `sign()` below calls this directly — it is not a
+    /// parallel/duplicated implementation.
+    static func signature(stringToSign: String, secretAccessKey: String, dateStamp: String,
+                          region: String, service: String) -> String {
+        var key = SymmetricKey(data: Data("AWS4\(secretAccessKey)".utf8))
+        key = hmac(key, dateStamp)
+        key = hmac(key, region)
+        key = hmac(key, service)
+        key = hmac(key, "aws4_request")
+        return hmacHex(key, stringToSign)
     }
 
     public static func sign(request: URLRequest, body: Data, service: String,
@@ -71,17 +95,13 @@ public enum SigV4 {
         let stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, hexSHA256(Data(cr.utf8))]
             .joined(separator: "\n")
 
-        var key = SymmetricKey(data: Data("AWS4\(credentials.secretAccessKey)".utf8))
-        key = hmac(key, dateStamp)
-        key = hmac(key, credentials.region)
-        key = hmac(key, service)
-        key = hmac(key, "aws4_request")
-        let signature = hmacHex(key, stringToSign)
+        let sig = signature(stringToSign: stringToSign, secretAccessKey: credentials.secretAccessKey,
+                            dateStamp: dateStamp, region: credentials.region, service: service)
 
         let signedHeaders = headers.keys.map { $0.lowercased() }.sorted().joined(separator: ";")
         headers["authorization"] = "AWS4-HMAC-SHA256 "
             + "Credential=\(credentials.accessKeyID)/\(scope), "
-            + "SignedHeaders=\(signedHeaders), Signature=\(signature)"
+            + "SignedHeaders=\(signedHeaders), Signature=\(sig)"
 
         req.httpBody = body
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }

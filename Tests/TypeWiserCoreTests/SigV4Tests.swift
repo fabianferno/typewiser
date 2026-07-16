@@ -55,7 +55,7 @@ private let creds = AWSCredentials(
     #expect(a.value(forHTTPHeaderField: "Authorization") != b.value(forHTTPHeaderField: "Authorization"))
 }
 
-@Test func canonicalRequestHasSixLines() {
+@Test func canonicalRequestHasEightLines() {
     let cr = SigV4.canonicalRequest(
         method: "POST", path: "/model/x/invoke", query: "",
         headers: ["host": "example.com", "x-amz-date": "20150830T123600Z"],
@@ -96,4 +96,48 @@ private let creds = AWSCredentials(
     // AWS's "string to sign" fixture for this vector.
     #expect(SigV4.hexSHA256(Data(cr.utf8)) ==
             "bb579772317eb040ac9ed261061d46c1f17a8133879d6129b6e1c25292927e63")
+}
+
+// Full signing-chain coverage against the same AWS-published "get-vanilla" vector
+// (AWS SigV4 test suite, https://docs.aws.amazon.com/general/latest/gr/signature-v4-test-suite.html,
+// mirrored at https://github.com/saibotsivad/aws-sig-v4-test-suite). Unlike the test above
+// (which only covers canonicalRequest/hexSHA256), this exercises the HMAC signing-key
+// derivation chain (secret -> date -> region -> service -> "aws4_request") and the final
+// signature via the same `SigV4.signature` function `sign()` calls internally — not a
+// duplicated reimplementation. A refactor that reorders/breaks the key-derivation steps
+// would fail this test even though it might still pass the purely-relative determinism
+// tests above.
+//
+// Note: this vector's region ("us-east-1") and service ("service") are AWS's published
+// fixture values, not this project's real "bedrock"/"ap-south-1" — intentionally left
+// as-is so the assertion matches AWS's ground truth exactly.
+//
+// The published string-to-sign for this vector embeds the canonical request's hash
+// (verified above as bb579772...); we build the string-to-sign from that same
+// just-verified hash rather than re-pasting it, so this test can't silently drift out of
+// sync with the creq/hash link proven above.
+@Test func signatureMatchesAWSPublishedVanillaVector() {
+    let cr = SigV4.canonicalRequest(
+        method: "GET", path: "/", query: "",
+        headers: ["host": "example.amazonaws.com", "x-amz-date": "20150830T123600Z"],
+        bodyHash: SigV4.hexSHA256(Data())
+    )
+    let crHash = SigV4.hexSHA256(Data(cr.utf8))
+    #expect(crHash == "bb579772317eb040ac9ed261061d46c1f17a8133879d6129b6e1c25292927e63")
+
+    let stringToSign = [
+        "AWS4-HMAC-SHA256",
+        "20150830T123600Z",
+        "20150830/us-east-1/service/aws4_request",
+        crHash,
+    ].joined(separator: "\n")
+
+    let signature = SigV4.signature(
+        stringToSign: stringToSign,
+        secretAccessKey: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+        dateStamp: "20150830",
+        region: "us-east-1",
+        service: "service"
+    )
+    #expect(signature == "5fa00fa31553b73ebf1942676e86291e8372ff2a2260956d9b8aae1d763fbf31")
 }
