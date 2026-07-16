@@ -91,3 +91,66 @@ import Testing
 
     await startTask.value
 }
+
+/// Regression test for the Task 13 orphaned-process leak: if the app
+/// crashes or is force-quit, `stop()` never runs and the 17GB `llama-server`
+/// child leaks forever. The fix records the spawned pid in a pidfile keyed
+/// by port; `terminateOrphanedProcessIfPresent` is what a fresh launch (or a
+/// termination-notification handler) calls to reap it.
+///
+/// Uses a throwaway *compiled* binary literally named `llama-server` (not
+/// the real 17GB one) on a port nothing else uses, so this never touches
+/// the real model or the real app's pidfile. It must be a real executable
+/// rather than a `#!/bin/sh` script: a shebang script actually runs under
+/// `/bin/sh`, so `ps -o comm=` would report "sh", not "llama-server" —
+/// which would defeat the exact check `terminateOrphanedProcessIfPresent`
+/// performs. The real llama-server is a native binary with no interpreter,
+/// so this fixture has to be one too for the test to mean anything.
+@Test func terminateOrphanedProcessKillsOnlyAConfirmedLlamaServer() async throws {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("engine-manager-orphan-test-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: dir) }
+
+    let sourceURL = dir.appendingPathComponent("sleeper.c")
+    let binaryURL = dir.appendingPathComponent("llama-server")
+    try "#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n"
+        .write(to: sourceURL, atomically: true, encoding: .utf8)
+
+    let cc = Process()
+    cc.executableURL = URL(fileURLWithPath: "/usr/bin/cc")
+    cc.arguments = ["-o", binaryURL.path, sourceURL.path]
+    try cc.run()
+    cc.waitUntilExit()
+    #expect(cc.terminationStatus == 0, "test fixture failed to compile")
+
+    let config = EngineConfig(
+        binaryPath: binaryURL.path,
+        modelPath: binaryURL.path,
+        draftModelPath: binaryURL.path,
+        port: 18377
+    )
+    let manager = EngineManager(config: config)
+    let startTask = Task { await manager.start() }
+
+    // Give start() time to spawn the child and write its pidfile before we
+    // simulate "a previous run crashed" by reaping via the static helper
+    // instead of calling manager.stop().
+    try await Task.sleep(for: .milliseconds(300))
+
+    let pid = await manager.processIdentifierForTesting()
+    #expect(pid != nil, "start() should have a live child by now")
+
+    EngineManager.terminateOrphanedProcessIfPresent(config: config)
+
+    // SIGTERM is asynchronous; poll briefly for the process to actually exit.
+    var stillAlive = true
+    for _ in 0..<20 {
+        if let pid, kill(pid, 0) != 0 { stillAlive = false; break }
+        try await Task.sleep(for: .milliseconds(100))
+    }
+    #expect(!stillAlive, "orphaned llama-server should have been terminated")
+
+    await manager.stop()
+    await startTask.value
+}

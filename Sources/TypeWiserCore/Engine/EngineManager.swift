@@ -97,6 +97,7 @@ public actor EngineManager {
             return
         }
         process = p
+        Self.writePidFile(pid: p.processIdentifier, port: config.port)
         await waitForHealth(generation: myGeneration)
     }
 
@@ -137,5 +138,76 @@ public actor EngineManager {
         process?.terminate()
         process = nil
         state = .stopped
+        Self.removePidFile(port: config.port)
+    }
+
+    /// Test-only seam: lets tests confirm a child was actually spawned and
+    /// poll for its exit without reaching into `process` directly.
+    func processIdentifierForTesting() -> Int32? {
+        process?.processIdentifier
+    }
+
+    // MARK: - Orphan recovery
+    //
+    // `Process.terminate()` above only runs while this app process is alive to
+    // call it. If the app crashes or is force-quit, the child `llama-server`
+    // (holding ~17GB of RAM) is never signaled and leaks indefinitely. To fix
+    // that without an OS-level process group/launchd dependency, every spawn
+    // records its pid in a small pidfile named after the port it bound (so a
+    // background test instance on a throwaway port never collides with the
+    // real app's port 8231). `terminateOrphanedProcessIfPresent` reads that
+    // file and, if the recorded pid still resolves to a process actually named
+    // `llama-server` (never trusting a bare pid, which the OS can recycle to
+    // an unrelated process), kills it and removes the file. Calling this once
+    // at app launch cleans up anything a previous crashed run left behind;
+    // calling it again from a `NSApplication.willTerminateNotification`
+    // observer kills the still-live child on a normal quit, since the
+    // pidfile is present either way — one mechanism serves both cases.
+
+    private static func pidFileURL(port: Int) -> URL {
+        URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("xyz.crevn.typewiser.llama-server-\(port).pid")
+    }
+
+    private static func writePidFile(pid: Int32, port: Int) {
+        try? "\(pid)".write(to: pidFileURL(port: port), atomically: true, encoding: .utf8)
+    }
+
+    private static func removePidFile(port: Int) {
+        try? FileManager.default.removeItem(at: pidFileURL(port: port))
+    }
+
+    /// Only ever signals a pid we can confirm is a `llama-server` process,
+    /// and always removes the pidfile afterward so a dead reference is never
+    /// consulted again.
+    public static func terminateOrphanedProcessIfPresent(config: EngineConfig = .gemmaDefault) {
+        let url = pidFileURL(port: config.port)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        guard let raw = try? String(contentsOf: url, encoding: .utf8),
+              let pid = pid_t(raw.trimmingCharacters(in: .whitespacesAndNewlines))
+        else { return }
+
+        guard processCommandName(pid: pid)?.hasSuffix("llama-server") == true else { return }
+        kill(pid, SIGTERM)
+    }
+
+    private static func processCommandName(pid: pid_t) -> String? {
+        let ps = Process()
+        ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+        ps.arguments = ["-p", "\(pid)", "-o", "comm="]
+        let pipe = Pipe()
+        ps.standardOutput = pipe
+        ps.standardError = FileHandle.nullDevice
+        do {
+            try ps.run()
+        } catch {
+            return nil
+        }
+        ps.waitUntilExit()
+        guard ps.terminationStatus == 0 else { return nil }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let name = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (name?.isEmpty ?? true) ? nil : name
     }
 }
