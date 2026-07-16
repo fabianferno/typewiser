@@ -49,8 +49,9 @@ final class HUDController {
         panel?.orderOut(nil)
     }
 
-    func update(_ phase: SessionPhase) {
+    func update(_ phase: SessionPhase, note: String? = nil) {
         state.phase = phase
+        state.note = note
     }
 }
 
@@ -58,4 +59,8 @@ final class HUDController {
 @MainActor
 final class HUDState {
     var phase: SessionPhase = .idle
+    /// Optional secondary line shown below the phase body — currently only
+    /// used to warn that Cloud mode has no credentials, so cleanup silently
+    /// isn't running. `nil` renders nothing extra.
+    var note: String?
 }

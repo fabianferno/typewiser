@@ -30,7 +30,11 @@ struct MenuBarView: View {
 
     private var statusText: String {
         switch model.mode {
-        case .cloud: return "Bedrock Nova Lite · ap-south-1"
+        case .cloud:
+            guard model.hasCloudCredentials() else {
+                return "Cloud · no credentials — add them in Settings"
+            }
+            return "Bedrock Nova Lite · ap-south-1"
         case .local:
             switch model.engineState {
             case .stopped: return "Local engine stopped"

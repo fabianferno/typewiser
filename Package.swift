@@ -13,7 +13,11 @@ let package = Package(
         .testTarget(
             name: "TypeWiserCoreTests",
             dependencies: ["TypeWiserCore"],
-            resources: [.copy("Fixtures/golden.json")]
+            // `GoldenRewriteTests.swift` loads Fixtures/golden.json via #filePath,
+            // relative to the source file on disk — not via Bundle.module — so this
+            // is excluded rather than declared as a `resources:` copy (which would be
+            // dead: nothing ever reads it via Bundle.module).
+            exclude: ["Fixtures"]
         ),
     ]
 )

@@ -22,6 +22,17 @@ public actor DictationSession {
     private var continuation: AsyncStream<SessionPhase>.Continuation?
     public let phaseStream: AsyncStream<SessionPhase>
 
+    /// Set as the very first, synchronous statement of `end()`/`cancel()` —
+    /// before either does its first `await` — so it is guaranteed to be
+    /// `true` by the time any *later* actor turn runs, including an
+    /// `emitInterim` call from an interim-loop iteration that was already
+    /// mid-`tryTranscribe` when `end()`/`cancel()` was invoked. Without this,
+    /// that in-flight call's result still reaches `emitInterim` once it
+    /// resolves, landing during `end()`'s `await whisper.transcribe(...)` and
+    /// flipping the HUD back to "Listening" after it had already moved on to
+    /// "Transcribing…". Reset at the top of `begin()` for the next cycle.
+    private var isEnding = false
+
     public init(audio: AudioCapturing,
                 whisper: Transcribing,
                 rewriter: @escaping @Sendable () -> Rewriter,
@@ -42,6 +53,7 @@ public actor DictationSession {
     private func emit(_ p: SessionPhase) { continuation?.yield(p) }
 
     public func begin() async {
+        isEnding = false
         do {
             try await audio.start()
         } catch {
@@ -73,9 +85,13 @@ public actor DictationSession {
         }
     }
 
-    private func emitInterim(_ text: String) { emit(.recording(interim: text)) }
+    private func emitInterim(_ text: String) {
+        guard !isEnding else { return }
+        emit(.recording(interim: text))
+    }
 
     public func cancel() async {
+        isEnding = true
         interimTask?.cancel()
         interimTask = nil
         await audio.stop()
@@ -84,6 +100,7 @@ public actor DictationSession {
     }
 
     public func end() async {
+        isEnding = true
         interimTask?.cancel()
         interimTask = nil
         await audio.stop()

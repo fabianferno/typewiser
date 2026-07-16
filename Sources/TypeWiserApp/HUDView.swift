@@ -18,6 +18,13 @@ struct HUDView: View {
                 .font(.system(size: 14))
                 .lineLimit(3)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let note = state.note {
+                Text(note)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(14)
         .frame(width: 380, alignment: .leading)

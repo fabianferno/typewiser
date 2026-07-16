@@ -29,12 +29,23 @@ final class FakeWhisper: Transcribing, @unchecked Sendable {
     /// sleep-and-retry branch); set to a real string to exercise the
     /// interim-success path that calls `emitInterim`.
     var interimText: String?
+    /// Artificial delay before `tryTranscribe` resolves, simulating an
+    /// interim request that is still in flight when `end()`/`cancel()` runs.
+    /// Used by `lateInterimAfterEndDoesNotReappearAfterTranscribing` to prove
+    /// such a call can't resurrect `.recording(interim:)` after the session
+    /// has already moved past it.
+    var interimDelay: Duration = .zero
     var cancelCount = 0
     func transcribe(pcm16: [Int16]) async throws -> String {
         if let e = finalError { throw e }
         return finalText
     }
-    func tryTranscribe(pcm16: [Int16]) async throws -> String? { interimText }
+    func tryTranscribe(pcm16: [Int16]) async throws -> String? {
+        if interimDelay > .zero {
+            try? await Task.sleep(for: interimDelay)
+        }
+        return interimText
+    }
     func cancelInFlight() async { cancelCount += 1 }
 }
 
@@ -246,6 +257,61 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
     #expect(sawInserted, "the final rewrite must still win as .inserted after interim activity")
     #expect(pb.log.contains("set:Let's meet at 3."))
     #expect(keys.sent == 1)
+}
+
+// MARK: - Finding 4: a late interim result must not resurrect `.recording`
+// after `end()` has moved on
+//
+// The interim loop only checked `Task.isCancelled` at the top of its `while`
+// loop. If an iteration was already awaiting `tryTranscribe` when `end()`
+// cancelled the loop, that in-flight call still ran to completion and still
+// called `emitInterim` once it resolved — landing during `end()`'s own
+// `await whisper.transcribe(...)` and flipping the HUD from "Transcribing…"
+// back to red "Listening" for however long that stale call took. This test
+// reproduces exactly that shape with `FakeWhisper.interimDelay`, then proves
+// the fix (the `isEnding` flag checked inside `emitInterim`) means no
+// `.recording` phase can appear after `.transcribing`, and the final phase
+// is still `.inserted`.
+@Test func lateInterimAfterEndDoesNotReappearAfterTranscribing() async {
+    let audio = FakeAudio()
+    audio.samples = Array(repeating: 0, count: 16000) // over the 8000-sample guard
+    let whisper = FakeWhisper()
+    whisper.interimText = "stale interim"
+    whisper.interimDelay = .milliseconds(300) // still in flight when end() cancels
+    let pb = FakePasteboard(), keys = FakeKeys()
+    let s = makeSession(audio: audio, whisper: whisper, pb: pb, keys: keys)
+
+    let collector = PhaseCollector()
+    let stream = await s.phaseStream
+    let consumer = Task {
+        for await phase in stream { await collector.record(phase) }
+    }
+    defer { consumer.cancel() }
+
+    await s.begin()
+    // Give the interim loop a moment to actually be inside tryTranscribe's
+    // artificial delay before end() cancels it out from under it.
+    try? await Task.sleep(for: .milliseconds(50))
+    await s.end()
+
+    // Wait well past interimDelay so the stale tryTranscribe call has had
+    // time to resolve and (pre-fix) reach emitInterim.
+    try? await Task.sleep(for: .milliseconds(500))
+
+    let phases = await collector.phases
+    #expect(phases.last == .inserted("Let's meet at 3."),
+            "end() must have the final word — no stale interim after it: \(phases)")
+
+    if let transcribingIndex = phases.firstIndex(of: .transcribing) {
+        let after = phases[(transcribingIndex + 1)...]
+        let sawStaleRecording = after.contains { phase in
+            if case .recording = phase { return true }
+            return false
+        }
+        #expect(!sawStaleRecording, "no .recording phase may appear after .transcribing: \(phases)")
+    } else {
+        Issue.record(".transcribing was never emitted: \(phases)")
+    }
 }
 
 // MARK: - begin()'s microphone-failure path

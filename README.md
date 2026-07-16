@@ -29,7 +29,13 @@ persist a grant for it across relaunches.
 2. Grant Accessibility and Microphone when prompted.
 3. For Cloud mode, add AWS credentials in Settings → Cloud. They are stored in
    the macOS Keychain (service `xyz.crevn.typewiser`) and are never written to
-   UserDefaults, a plist, a dotfile, or this repo.
+   UserDefaults, a plist, a dotfile, or this repo. **Cloud mode requires this
+   step** — switching to Cloud immediately kills the local `llama-server`, so
+   without saved credentials there is no rewriter to fall back to. The menu
+   bar says so plainly (`Cloud · no credentials — add them in Settings`
+   instead of the model name) and the HUD adds a note on every dictation;
+   your words are never lost either way — they're just pasted raw, unedited,
+   until credentials are added.
 
 ## Engine modes
 
@@ -77,7 +83,7 @@ VAD-segmented streaming endpoint — not anything the client can paper over.
 ## Tests
 
 ```bash
-swift test                                                  # 119 tests, 5 suites, no network/Keychain/model deps
+swift test                                                  # 120 tests, 5 suites, no network/Keychain/model deps
 TYPEWISER_INTEGRATION=1 swift test --filter wavEncoderRoundTripIsAcceptedByRealServer  # opt-in: real whisper.cpp server, needs `say`+`ffmpeg`
 TYPEWISER_GOLDEN_LOCAL=1 swift test --filter goldenLocal    # opt-in: needs llama-server up on :8231
 TYPEWISER_GOLDEN_BEDROCK=1 swift test --filter goldenBedrock  # opt-in: hits real Bedrock, costs money, creds from Keychain or env

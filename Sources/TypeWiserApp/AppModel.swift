@@ -3,6 +3,18 @@ import Foundation
 import Observation
 import TypeWiserCore
 
+/// Used when Cloud mode is selected but no AWS credentials are saved yet.
+/// Fails immediately with `.unavailable` rather than attempting a network
+/// call — there's nothing to call. `DictationSession.end()`'s existing
+/// `?? trimmed` fallback still guarantees the raw transcript is pasted (never
+/// lose the user's words); the visible signal that cleanup didn't run lives
+/// in the menu bar text and HUD note (see `AppModel.hasCloudCredentials()`).
+private struct NoCredentialsRewriter: Rewriter {
+    func rewrite(_ transcript: String, options: RewriteOptions, context: RewriteContext) async throws -> String {
+        throw RewriteError.unavailable
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -34,12 +46,14 @@ final class AppModel {
         // Reap it before we possibly spawn a fresh one below.
         EngineManager.terminateOrphanedProcessIfPresent()
 
-        // Belt-and-suspenders for the *normal* quit path: `stop()` (called
-        // from `applyMode()`/deinit-adjacent paths) already terminates our
-        // child, but if that ever doesn't run in time, this notification
-        // fires as part of app termination and reaps the same pidfile-
-        // recorded process directly — no MainActor/actor hop required, so
-        // it can't be skipped by the app exiting before an async Task runs.
+        // This is NOT a backup — on a normal quit in Local mode, this is the
+        // ONLY thing that reaps the ~17GB `llama-server` child. There is no
+        // `deinit` on this class, and `applyMode()` only calls `engine.stop()`
+        // when switching mode TO Cloud, never on quit. Reaping here works
+        // even though nothing else does because this fires synchronously as
+        // part of app termination, with no MainActor/actor hop to race
+        // against the process exiting — do not delete this thinking it is
+        // redundant with some other cleanup path; there isn't one.
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
@@ -60,7 +74,15 @@ final class AppModel {
                 case .local:
                     return LocalLlamaRewriter()
                 case .cloud:
-                    guard let c = credentials.load() else { return LocalLlamaRewriter() }
+                    // Cloud mode already killed llama-server (see `applyMode()`), so
+                    // falling back to `LocalLlamaRewriter()` here would just point at a
+                    // dead port: every dictation would silently degrade to the raw
+                    // transcript via the `?? trimmed` fallback in `DictationSession.end()`
+                    // — HUD still green, zero signal that cleanup stopped happening. Fail
+                    // fast instead (no doomed network call), and let the menu bar / HUD
+                    // note (see `hasCloudCredentials()` / `observePhases()`) make the
+                    // missing configuration visible to the user.
+                    guard let c = credentials.load() else { return NoCredentialsRewriter() }
                     return BedrockRewriter(credentials: c)
                 }
             },
@@ -78,6 +100,14 @@ final class AppModel {
         monitor.start()
     }
 
+    /// Whether Cloud mode currently has usable AWS credentials in the
+    /// Keychain. Read fresh (not cached) on every call — a Keychain lookup is
+    /// cheap, and this way saving/deleting credentials in Settings → Cloud is
+    /// reflected immediately, without needing to observe the Keychain for
+    /// changes. Used by the menu bar status text and the HUD note so the user
+    /// can always tell whether Cloud cleanup is actually configured.
+    func hasCloudCredentials() -> Bool { credentials.load() != nil }
+
     private func handle(_ action: HotkeyAction) async {
         switch action {
         case .start: await session.begin()
@@ -94,7 +124,15 @@ final class AppModel {
         let stream = await session.phaseStream
         for await p in stream {
             self.phase = p
-            hud.update(p)
+            // Cloud-with-no-credentials degrades every dictation to the raw
+            // transcript with no rewriter error visible anywhere else (see
+            // `NoCredentialsRewriter` above) — surface it here so the HUD
+            // itself tells the user cleanup isn't happening, rather than
+            // looking identical to a successful cleaned-up paste.
+            let note: String? = (p != .idle && mode == .cloud && !hasCloudCredentials())
+                ? "Cloud has no credentials — pasting the raw transcript, unedited"
+                : nil
+            hud.update(p, note: note)
 
             // Any new phase invalidates a previously scheduled auto-hide:
             // without this, starting a fresh dictation right after an
