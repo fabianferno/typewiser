@@ -47,10 +47,14 @@ struct BedrockRewriterTests {
         #expect(seenURL?.path.contains("nova-lite") == true)
         #expect(seenURL?.path.hasSuffix("/invoke") == true)
         #expect(seenAuth?.hasPrefix("AWS4-HMAC-SHA256 ") == true)
-
-        // Exploratory, not asserted: whether the explicitly-signed "Host" header survives
-        // URLSession's transport to startLoading(). See task report for what was observed.
-        _ = seenHostHeader
+        // The signed "Host" header does survive to MockProtocol.startLoading() unmodified
+        // (confirmed here, and separately with a probe using a deliberately mismatched
+        // Host value — see task report). That only proves the mock harness passes it
+        // through as-is; a real network transport is a separate question this doesn't
+        // answer, since URLProtocol interception happens before the OS ever opens a
+        // socket, and the "restricted header" quirk is reported to bite at that later
+        // layer.
+        #expect(seenHostHeader == "bedrock-runtime.ap-south-1.amazonaws.com")
     }
 
     @Test func noOpOptionsSkipTheNetworkEntirely() async throws {
