@@ -109,20 +109,8 @@ import Testing
 @Test func terminateOrphanedProcessKillsOnlyAConfirmedLlamaServer() async throws {
     let dir = FileManager.default.temporaryDirectory
         .appendingPathComponent("engine-manager-orphan-test-\(UUID().uuidString)")
-    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: dir) }
-
-    let sourceURL = dir.appendingPathComponent("sleeper.c")
-    let binaryURL = dir.appendingPathComponent("llama-server")
-    try "#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n"
-        .write(to: sourceURL, atomically: true, encoding: .utf8)
-
-    let cc = Process()
-    cc.executableURL = URL(fileURLWithPath: "/usr/bin/cc")
-    cc.arguments = ["-o", binaryURL.path, sourceURL.path]
-    try cc.run()
-    cc.waitUntilExit()
-    #expect(cc.terminationStatus == 0, "test fixture failed to compile")
+    let binaryURL = try compileLlamaServerFixture(in: dir)
 
     let config = EngineConfig(
         binaryPath: binaryURL.path,
@@ -153,4 +141,132 @@ import Testing
 
     await manager.stop()
     await startTask.value
+}
+
+/// Compiles the throwaway native `llama-server` fixture used by the tests
+/// below into `dir`, returning its path. Shared helper so each safety test
+/// doesn't repeat the compile boilerplate.
+private func compileLlamaServerFixture(in dir: URL) throws -> URL {
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let sourceURL = dir.appendingPathComponent("sleeper.c")
+    let binaryURL = dir.appendingPathComponent("llama-server")
+    try "#include <unistd.h>\nint main(void) { sleep(30); return 0; }\n"
+        .write(to: sourceURL, atomically: true, encoding: .utf8)
+
+    let cc = Process()
+    cc.executableURL = URL(fileURLWithPath: "/usr/bin/cc")
+    cc.arguments = ["-o", binaryURL.path, sourceURL.path]
+    try cc.run()
+    cc.waitUntilExit()
+    #expect(cc.terminationStatus == 0, "test fixture failed to compile")
+    return binaryURL
+}
+
+/// THE CRITICAL SAFETY TEST. Reproduces the exact bug this task exists to
+/// fix: our `llama-server` dies without `stop()` running, leaving a stale
+/// pidfile, and the OS recycles that pid to a *different* process (in
+/// reality: a `llama-server` the user launched by hand for their own local
+/// work). A name-only identity check (the pre-fix behavior) would pass and
+/// SIGTERM the wrong process — silently destroying someone else's 17GB.
+///
+/// This test doesn't need to wait for an actual pid-recycling race (which
+/// would be slow and flaky to engineer); it simulates the observable
+/// consequence directly by writing a pidfile whose recorded `lstart` does
+/// NOT match the live process's real start time — exactly what a recycled
+/// pid would look like, since the "new" process at that pid necessarily
+/// started at a different (later) time than the one we originally recorded.
+///
+/// Asserts the process survives and the stale pidfile is cleaned up so it's
+/// never consulted again.
+@Test func mismatchedStartTimeMeansDoNotKill() async throws {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("engine-manager-orphan-mismatch-test-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let binaryURL = try compileLlamaServerFixture(in: dir)
+
+    let config = EngineConfig(
+        binaryPath: binaryURL.path,
+        modelPath: binaryURL.path,
+        draftModelPath: binaryURL.path,
+        port: 18378
+    )
+    let manager = EngineManager(config: config)
+    let startTask = Task { await manager.start() }
+
+    // Safety net: if an assertion throws before we reach the normal
+    // `manager.stop()` below, make sure the fixture process (which sleeps
+    // 30s) doesn't outlive this test.
+    var capturedPid: Int32?
+    defer { if let capturedPid { kill(capturedPid, SIGKILL) } }
+
+    try await Task.sleep(for: .milliseconds(300))
+    let pid = try #require(await manager.processIdentifierForTesting(),
+                            "start() should have a live child by now")
+    capturedPid = pid
+
+    // Overwrite the pidfile start() just wrote with one recording a bogus,
+    // definitely-wrong start time for the SAME live pid — simulating "this
+    // pid now belongs to a process that started at a different time than
+    // the one we remember", i.e. pid recycling.
+    let record = EngineManager.OrphanPidRecord(pid: pid, lstart: "Thu Jan  1 00:00:00 1970", port: config.port)
+    let data = try JSONEncoder().encode(record)
+    try data.write(to: EngineManager.pidFileURL(port: config.port), options: .atomic)
+
+    EngineManager.terminateOrphanedProcessIfPresent(config: config)
+
+    // Give a real SIGTERM (if wrongly sent) time to land before we check.
+    try await Task.sleep(for: .milliseconds(500))
+    #expect(kill(pid, 0) == 0,
+            "a start-time mismatch must NEVER result in the live process being killed")
+
+    let pidFileStillPresent = FileManager.default.fileExists(
+        atPath: EngineManager.pidFileURL(port: config.port).path)
+    #expect(!pidFileStillPresent, "the stale/unverifiable pidfile should be removed so it is never reconsulted")
+
+    // Clean shutdown (mirrors the other orphan test): stop() before awaiting
+    // startTask so waitForHealth's generation guard exits immediately instead
+    // of polling until the fixture's sleep(30) finishes on its own.
+    await manager.stop()
+    await startTask.value
+}
+
+/// A malformed or legacy-format pidfile (e.g. the old bare-pid text file
+/// this project used before the JSON format) must never be trusted enough
+/// to kill anything, and must not crash the decode path.
+@Test func malformedPidFileIsDiscardedWithoutKillingAnything() throws {
+    let port = 18379
+    let url = EngineManager.pidFileURL(port: port)
+    try "12345".write(to: url, atomically: true, encoding: .utf8)
+
+    let config = EngineConfig(binaryPath: "/bin/sh", modelPath: "/bin/sh", draftModelPath: "/bin/sh", port: port)
+    EngineManager.terminateOrphanedProcessIfPresent(config: config) // must not crash
+
+    #expect(!FileManager.default.fileExists(atPath: url.path),
+            "a malformed pidfile should be discarded, not left behind")
+}
+
+/// A pidfile that correctly points at a pid which no longer exists (the
+/// process already exited on its own) must be handled gracefully: no crash,
+/// and the stale reference is cleaned up.
+@Test func pidFileForDeadProcessIsCleanedUpWithoutCrashing() async throws {
+    // Spawn and wait out a genuinely short-lived process to get a pid that
+    // is very unlikely to still be running (or freshly recycled) afterward.
+    let shortLived = Process()
+    shortLived.executableURL = URL(fileURLWithPath: "/bin/sh")
+    shortLived.arguments = ["-c", "exit 0"]
+    try shortLived.run()
+    shortLived.waitUntilExit()
+    let deadPid = shortLived.processIdentifier
+
+    let port = 18380
+    let record = EngineManager.OrphanPidRecord(pid: deadPid, lstart: "Thu Jan  1 00:00:00 1970", port: port)
+    let data = try JSONEncoder().encode(record)
+    let url = EngineManager.pidFileURL(port: port)
+    try data.write(to: url, options: .atomic)
+
+    let config = EngineConfig(binaryPath: "/bin/sh", modelPath: "/bin/sh", draftModelPath: "/bin/sh", port: port)
+    EngineManager.terminateOrphanedProcessIfPresent(config: config) // must not crash
+
+    #expect(!FileManager.default.fileExists(atPath: url.path),
+            "a pidfile pointing at a dead pid should be removed")
 }

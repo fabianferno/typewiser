@@ -153,49 +153,107 @@ public actor EngineManager {
     // call it. If the app crashes or is force-quit, the child `llama-server`
     // (holding ~17GB of RAM) is never signaled and leaks indefinitely. To fix
     // that without an OS-level process group/launchd dependency, every spawn
-    // records its pid in a small pidfile named after the port it bound (so a
-    // background test instance on a throwaway port never collides with the
-    // real app's port 8231). `terminateOrphanedProcessIfPresent` reads that
-    // file and, if the recorded pid still resolves to a process actually named
-    // `llama-server` (never trusting a bare pid, which the OS can recycle to
-    // an unrelated process), kills it and removes the file. Calling this once
-    // at app launch cleans up anything a previous crashed run left behind;
-    // calling it again from a `NSApplication.willTerminateNotification`
-    // observer kills the still-live child on a normal quit, since the
-    // pidfile is present either way — one mechanism serves both cases.
+    // records identifying facts about itself in a small JSON pidfile named
+    // after the port it bound (so a background test instance on a throwaway
+    // port never collides with the real app's port 8231).
+    //
+    // A bare pid is NOT sufficient proof of identity: the OS recycles pids,
+    // and a stale pidfile pointing at a pid that now belongs to some other
+    // `llama-server` (e.g. one the user launched by hand for their own local
+    // work) would let us SIGTERM a process we never started — silently
+    // destroying someone else's 17GB of work. So `terminateOrphanedProcessIfPresent`
+    // only kills when EVERY recorded fact still matches the live process:
+    // the pid exists, its command basename ends in `llama-server`, its start
+    // time (`ps -o lstart=`) is byte-for-byte identical to what we recorded
+    // at spawn (a recycled pid cannot replay the exact same start time — this
+    // is what actually defeats recycling), and its full command line still
+    // contains our configured port and model path. Any mismatch, decode
+    // failure (e.g. a legacy bare-pid file from an older build), or
+    // inconclusive check means "do nothing" — leaking 17GB is strictly safer
+    // than killing the wrong process. Calling this once at app launch cleans
+    // up anything a previous crashed run left behind; calling it again from
+    // a `NSApplication.willTerminateNotification` observer kills the
+    // still-live child on a normal quit, since the pidfile is present either
+    // way — one mechanism serves both cases.
 
-    private static func pidFileURL(port: Int) -> URL {
+    /// Everything we can positively re-identify our spawned process by.
+    /// `lstart` is the load-bearing field: it is the canonical way to defeat
+    /// pid recycling, since a pid recycled to a different process will always
+    /// have been started later than the process we recorded.
+    struct OrphanPidRecord: Codable, Equatable {
+        let pid: Int32
+        let lstart: String
+        let port: Int
+    }
+
+    static func pidFileURL(port: Int) -> URL {
         URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("xyz.crevn.typewiser.llama-server-\(port).pid")
     }
 
     private static func writePidFile(pid: Int32, port: Int) {
-        try? "\(pid)".write(to: pidFileURL(port: port), atomically: true, encoding: .utf8)
+        // If we can't read back the start time of the process we *just*
+        // spawned, we have nothing solid to re-identify it by later — better
+        // to write no pidfile (accepting a possible leak) than one we could
+        // never safely act on.
+        guard let lstart = processStartTime(pid: pid) else { return }
+        let record = OrphanPidRecord(pid: pid, lstart: lstart, port: port)
+        guard let data = try? JSONEncoder().encode(record) else { return }
+        try? data.write(to: pidFileURL(port: port), options: .atomic)
     }
 
     private static func removePidFile(port: Int) {
         try? FileManager.default.removeItem(at: pidFileURL(port: port))
     }
 
-    /// Only ever signals a pid we can confirm is a `llama-server` process,
-    /// and always removes the pidfile afterward so a dead reference is never
+    /// Only ever signals a pid we can positively prove is the exact
+    /// `llama-server` process we spawned — see the MARK comment above for why
+    /// each check exists. Always removes the pidfile afterward (whether or
+    /// not we killed anything) so a stale or unverifiable reference is never
     /// consulted again.
     public static func terminateOrphanedProcessIfPresent(config: EngineConfig = .gemmaDefault) {
         let url = pidFileURL(port: config.port)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        guard let raw = try? String(contentsOf: url, encoding: .utf8),
-              let pid = pid_t(raw.trimmingCharacters(in: .whitespacesAndNewlines))
-        else { return }
+        guard let data = try? Data(contentsOf: url),
+              let record = try? JSONDecoder().decode(OrphanPidRecord.self, from: data)
+        else { return } // missing, unreadable, or a legacy/malformed bare-pid file
+
+        let pid = pid_t(record.pid)
 
         guard processCommandName(pid: pid)?.hasSuffix("llama-server") == true else { return }
+        guard let liveStart = processStartTime(pid: pid), liveStart == record.lstart else { return }
+
+        // Belt-and-suspenders: confirm the live command line still carries
+        // our configured port and model path, matched as whole tokens (not a
+        // raw substring check, which could false-positive e.g. port 82
+        // against 8231).
+        guard let fullCommand = processFullCommand(pid: pid) else { return }
+        let tokens = fullCommand.split(separator: " ").map(String.init)
+        guard let portIdx = tokens.firstIndex(of: "--port"), portIdx + 1 < tokens.count,
+              tokens[portIdx + 1] == "\(config.port)"
+        else { return }
+        guard fullCommand.contains(config.modelPath) else { return }
+
         kill(pid, SIGTERM)
     }
 
     private static func processCommandName(pid: pid_t) -> String? {
+        runPS(pid: pid, format: "comm=")
+    }
+
+    private static func processStartTime(pid: pid_t) -> String? {
+        runPS(pid: pid, format: "lstart=")
+    }
+
+    private static func processFullCommand(pid: pid_t) -> String? {
+        runPS(pid: pid, format: "command=")
+    }
+
+    private static func runPS(pid: pid_t, format: String) -> String? {
         let ps = Process()
         ps.executableURL = URL(fileURLWithPath: "/bin/ps")
-        ps.arguments = ["-p", "\(pid)", "-o", "comm="]
+        ps.arguments = ["-p", "\(pid)", "-o", format]
         let pipe = Pipe()
         ps.standardOutput = pipe
         ps.standardError = FileHandle.nullDevice
@@ -207,7 +265,7 @@ public actor EngineManager {
         ps.waitUntilExit()
         guard ps.terminationStatus == 0 else { return nil }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let name = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (name?.isEmpty ?? true) ? nil : name
+        let value = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (value?.isEmpty ?? true) ? nil : value
     }
 }
