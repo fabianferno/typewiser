@@ -13,6 +13,9 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp .build/release/TypeWiserApp "$APP/Contents/MacOS/TypeWiserApp"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
+# Referenced by CFBundleIconFile in Info.plist. Regenerate with
+# Scripts/make-icon.sh when Resources/AppIcon.png changes.
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 
 # macOS ties Accessibility permission to the code signature. An ad-hoc
 # signature is identified by CDHash — a hash of the exact binary — so every

@@ -19,6 +19,13 @@ Accessibility and Microphone permission grants to a bundle ID plus a stable
 signature, which a bare `swift run` binary does not have — TCC will not
 persist a grant for it across relaunches.
 
+The app icon is committed as both its 1024×1024 master (`Resources/AppIcon.png`)
+and the rendered `Resources/AppIcon.icns` that `bundle-app.sh` copies in, so a
+normal build needs no image tooling. If you change the master, re-render with
+`./Scripts/make-icon.sh`. macOS aggressively caches icons — if the Dock or
+Finder still shows the old one after a rebuild, that's the cache, not the
+bundle; check with `Get Info` on `build/TypeWiser.app`.
+
 ## Setup
 
 **Run this once**, before your first build:

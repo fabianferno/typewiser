@@ -16,7 +16,7 @@ struct TypeWiserApp: App {
     }
 
     private var menuIcon: String {
-        if case .recording = model.phase { return "mic.fill" }
-        return "mic"
+        if case .recording = model.phase { return "waveform.circle.fill" }
+        return "waveform"
     }
 }

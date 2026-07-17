@@ -40,7 +40,7 @@ final class AppModel {
     private let whisper = WhisperClient(endpoint: URL(string: "https://whisper.crevn.xyz/inference")!)
     private var session: DictationSession!
     private var monitor: HotkeyMonitor!
-    private let hud = HUDController()
+    private let hud: HUDController
     /// Pending auto-hide scheduled after `.inserted`/`.error`. Cancelled the
     /// instant another phase arrives so a new dictation started inside the
     /// 1.5s window can't have this stale timer yank the HUD back down.
@@ -48,6 +48,12 @@ final class AppModel {
 
     init() {
         self.hasAccessibility = HotkeyMonitor.hasAccessibilityPermission()
+
+        // The HUD waveform polls this while recording. `audio` is an actor and
+        // `level()` is cheap (RMS over the last 100ms of the buffer), so the
+        // hop is affordable at the poll rate; it returns 0 when not recording.
+        let audio = self.audio
+        self.hud = HUDController(level: { await audio.level() })
 
         // A previous run that crashed or was force-quit never got to run
         // `stop()`, so its ~17GB llama-server child may still be resident.
