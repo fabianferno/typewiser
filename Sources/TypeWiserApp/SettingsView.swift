@@ -11,20 +11,76 @@ struct SettingsView: View {
     @State private var accessKey = ""
     @State private var secretKey = ""
     @State private var savedMessage = ""
+    @State private var sttSource: STTSource = .apple
+    @State private var whisperEndpoint = ""
+    @State private var llamaBinaryPath = ""
+    @State private var modelPath = ""
+    @State private var draftModelPath = ""
 
     private let credentials = KeychainCredentialStore()
 
     var body: some View {
         TabView {
             cleanupTab.tabItem { Label("Cleanup", systemImage: "wand.and.sparkles") }
+            engineTab.tabItem { Label("Engine", systemImage: "cpu") }
             cloudTab.tabItem { Label("Cloud", systemImage: "cloud") }
             setupTab.tabItem { Label("Setup", systemImage: "checkmark.shield") }
         }
-        .frame(width: 460, height: 340)
+        .frame(width: 460, height: 420)
         .onAppear {
             options = model.settings.options
             names = model.settings.nameDictionary.joined(separator: ", ")
+            sttSource = model.settings.sttSource
+            whisperEndpoint = model.settings.whisperEndpoint
+            llamaBinaryPath = model.settings.llamaBinaryPath
+            modelPath = model.settings.modelPath
+            draftModelPath = model.settings.draftModelPath
         }
+    }
+
+    /// Speech-to-text source and the local llama-server paths for Cleanup's
+    /// Local mode. All of these are read once at launch, so the footnote tells
+    /// the user a change needs a restart rather than silently doing nothing.
+    private var engineTab: some View {
+        Form {
+            Section("Speech-to-text") {
+                Picker("Transcribe with", selection: $sttSource) {
+                    Text("Apple (on-device)").tag(STTSource.apple)
+                    Text("Remote whisper.cpp").tag(STTSource.remote)
+                }
+                if sttSource == .apple {
+                    Text("Runs on-device with no setup. Audio never leaves your Mac.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    TextField("https://host/inference", text: $whisperEndpoint)
+                    Text("A whisper.cpp server's /inference endpoint. Audio is uploaded to it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Local rewrite engine (llama-server)") {
+                Text("Only used when Cleanup runs in Local mode. See SETUP.md to build llama.cpp and fetch a model.")
+                    .font(.caption).foregroundStyle(.secondary)
+                LabeledContent("Binary") {
+                    TextField("llama-server path", text: $llamaBinaryPath).lineLimit(1)
+                }
+                LabeledContent("Model") {
+                    TextField("model .gguf path", text: $modelPath).lineLimit(1)
+                }
+                LabeledContent("Draft model") {
+                    TextField("draft .gguf path (optional)", text: $draftModelPath).lineLimit(1)
+                }
+            }
+
+            Text("Changes take effect after you restart TypeWiser.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+        .onChange(of: sttSource) { _, new in model.settings.sttSource = new }
+        .onChange(of: whisperEndpoint) { _, new in model.settings.whisperEndpoint = new }
+        .onChange(of: llamaBinaryPath) { _, new in model.settings.llamaBinaryPath = new }
+        .onChange(of: modelPath) { _, new in model.settings.modelPath = new }
+        .onChange(of: draftModelPath) { _, new in model.settings.draftModelPath = new }
     }
 
     private var cleanupTab: some View {

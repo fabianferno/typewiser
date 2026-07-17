@@ -115,7 +115,11 @@ private struct TranscriptionResponse: Decodable {
 }
 
 private func transcribe(wavData: Data) async throws -> String {
-    let url = URL(string: "https://whisper.crevn.xyz/inference")!
+    // Point at your own whisper.cpp server. Defaults to a local one so this
+    // opt-in test never depends on someone else's infrastructure.
+    let endpoint = ProcessInfo.processInfo.environment["TYPEWISER_WHISPER_ENDPOINT"]
+        ?? "http://127.0.0.1:8080/inference"
+    let url = URL(string: endpoint)!
     let boundary = "Boundary-\(UUID().uuidString)"
 
     var request = URLRequest(url: url)
