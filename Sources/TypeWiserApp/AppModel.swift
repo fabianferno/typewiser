@@ -35,9 +35,9 @@ final class AppModel {
 
     let settings = SettingsStore()
     private let credentials = KeychainCredentialStore()
-    private let engine = EngineManager()
+    private let engine: EngineManager
     private let audio = AudioCapture()
-    private let whisper = WhisperClient(endpoint: URL(string: "https://whisper.crevn.xyz/inference")!)
+    private let transcriber: Transcribing
     private var session: DictationSession!
     private var monitor: HotkeyMonitor!
     private let hud: HUDController
@@ -49,6 +49,21 @@ final class AppModel {
     init() {
         self.hasAccessibility = HotkeyMonitor.hasAccessibilityPermission()
 
+        // Engine (llama-server) paths and the transcriber are both built from
+        // saved settings so a fresh clone can retarget them without a rebuild.
+        // Changing either takes effect on the next launch — they are injected
+        // into `EngineManager`/`DictationSession` once, here.
+        let engineConfig = settings.engineConfig
+        self.engine = EngineManager(config: engineConfig)
+        self.transcriber = Self.makeTranscriber(settings: settings)
+
+        // On-device recognition still needs the user's Speech grant; ask at
+        // launch (a no-op once already decided) so the first dictation isn't
+        // the thing that trips the prompt.
+        if settings.sttSource == .apple {
+            Task { _ = await AppleSpeechTranscriber.requestAuthorization() }
+        }
+
         // The HUD waveform polls this while recording. `audio` is an actor and
         // `level()` is cheap (RMS over the last 100ms of the buffer), so the
         // hop is affordable at the poll rate; it returns 0 when not recording.
@@ -57,8 +72,10 @@ final class AppModel {
 
         // A previous run that crashed or was force-quit never got to run
         // `stop()`, so its ~17GB llama-server child may still be resident.
-        // Reap it before we possibly spawn a fresh one below.
-        EngineManager.terminateOrphanedProcessIfPresent()
+        // Reap it before we possibly spawn a fresh one below. Uses the same
+        // config we launch with so the pid-file/model-path match holds even
+        // when the user has retargeted the model.
+        EngineManager.terminateOrphanedProcessIfPresent(config: engineConfig)
 
         // This is NOT a backup — on a normal quit in Local mode, this is the
         // ONLY thing that reaps the ~17GB `llama-server` child. There is no
@@ -73,7 +90,7 @@ final class AppModel {
             object: nil,
             queue: .main
         ) { _ in
-            EngineManager.terminateOrphanedProcessIfPresent()
+            EngineManager.terminateOrphanedProcessIfPresent(config: engineConfig)
         }
 
         self.mode = settings.mode
@@ -82,7 +99,7 @@ final class AppModel {
 
         session = DictationSession(
             audio: audio,
-            whisper: whisper,
+            whisper: transcriber,
             rewriter: {
                 switch settings.mode {
                 case .local:
@@ -198,6 +215,22 @@ final class AppModel {
             case .idle:
                 hud.hide()
             }
+        }
+    }
+
+    /// Chooses the speech-to-text backend from settings. Apple on-device is the
+    /// default and the fallback: if Remote is selected but no endpoint is
+    /// configured yet, dictation still works locally rather than failing.
+    private static func makeTranscriber(settings: SettingsStore) -> Transcribing {
+        switch settings.sttSource {
+        case .apple:
+            return AppleSpeechTranscriber()
+        case .remote:
+            let raw = settings.whisperEndpoint.trimmingCharacters(in: .whitespaces)
+            if !raw.isEmpty, let url = URL(string: raw) {
+                return WhisperClient(endpoint: url)
+            }
+            return AppleSpeechTranscriber()
         }
     }
 

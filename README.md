@@ -2,9 +2,14 @@
 
 Hold 🌐, speak, release. Cleaned-up text appears in whatever app has focus.
 
-Speech-to-text runs on a self-hosted whisper.cpp server. Cleanup — filler removal,
-grammar, self-correction resolution, name spelling — runs on an LLM, either locally
-or on AWS Bedrock.
+Speech-to-text runs **on-device** by default via Apple's Speech framework — no
+server, no model download, and audio never leaves your Mac. You can instead point
+it at a self-hosted whisper.cpp server (Settings → Engine). Cleanup — filler
+removal, grammar, self-correction resolution, name spelling — runs on an LLM,
+either locally (llama.cpp) or on AWS Bedrock.
+
+New here? See [`SETUP.md`](SETUP.md) for a from-scratch walkthrough, including the
+optional local llama.cpp rewrite engine.
 
 ## Build
 
@@ -67,7 +72,9 @@ This should not recur once you're signing with the certificate above.
 
 - **Local** spawns `llama-server` on port `8231` running Gemma 26B A4B
   (`-c 4096`, speculative decoding via a draft model, no `--mmproj`). Model
-  load takes 10–30s and holds ~17GB of RAM plus the GPU while active.
+  load takes 10–30s and holds ~17GB of RAM plus the GPU while active. The
+  binary and model paths default to a `~/Models/Local` layout and are
+  configurable in Settings → Engine — see [`SETUP.md`](SETUP.md).
 - **Cloud** kills the local `llama-server` process — reclaiming that RAM and
   GPU — and rewrites via Bedrock, model `apac.amazon.nova-lite-v1:0` in
   `ap-south-1`, signed with SigV4.
@@ -81,6 +88,9 @@ This should not recur once you're signing with the certificate above.
   cleaned up, but a `llama-server` some other tool launched never does.
 
 ## Known latency
+
+Applies to the **remote whisper.cpp** STT source only — Apple on-device
+transcription does not have this round-trip.
 
 The whisper.cpp server has exactly one inference slot and a ~3.5s fixed
 round-trip latency, regardless of clip length — it pads every request to a
@@ -109,8 +119,8 @@ VAD-segmented streaming endpoint — not anything the client can paper over.
 ## Tests
 
 ```bash
-swift test                                                  # 120 tests, 5 suites, no network/Keychain/model deps
-TYPEWISER_INTEGRATION=1 swift test --filter wavEncoderRoundTripIsAcceptedByRealServer  # opt-in: real whisper.cpp server, needs `say`+`ffmpeg`
+swift test                                                  # 128 tests, 5 suites, no network/Keychain/model deps
+TYPEWISER_INTEGRATION=1 swift test --filter wavEncoderRoundTripIsAcceptedByRealServer  # opt-in: real whisper.cpp server (set TYPEWISER_WHISPER_ENDPOINT, defaults to localhost:8080), needs `say`+`ffmpeg`
 TYPEWISER_GOLDEN_LOCAL=1 swift test --filter goldenLocal    # opt-in: needs llama-server up on :8231
 TYPEWISER_GOLDEN_BEDROCK=1 swift test --filter goldenBedrock  # opt-in: hits real Bedrock, costs money, creds from Keychain or env
 TYPEWISER_BEDROCK_LIVE=1 AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... swift test --filter liveBedrockRewriteAgainstRealAWS  # opt-in: real Bedrock call, creds from env only
@@ -128,5 +138,9 @@ See [`docs/manual-qa.md`](docs/manual-qa.md) for the checklist.
 
 ## Docs
 
-- Design: [`docs/superpowers/specs/2026-07-16-typewiser-design.md`](docs/superpowers/specs/2026-07-16-typewiser-design.md)
-- Plan: [`docs/superpowers/plans/2026-07-16-typewiser.md`](docs/superpowers/plans/2026-07-16-typewiser.md)
+- Setup (from scratch): [`SETUP.md`](SETUP.md)
+- Manual QA checklist: [`docs/manual-qa.md`](docs/manual-qa.md)
+
+## License
+
+Apache License 2.0 — see [`LICENSE`](LICENSE).

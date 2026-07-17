@@ -8,3 +8,6 @@ xcuserdata/
 credentials
 .superpowers/
 build/
+
+# internal planning docs — not for the public repo
+docs/superpowers/

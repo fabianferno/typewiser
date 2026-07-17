@@ -14,5 +14,7 @@
     <key>LSUIElement</key><true/>
     <key>NSMicrophoneUsageDescription</key>
     <string>TypeWiser records your voice while you hold the dictation key, and transcribes it to text.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>TypeWiser transcribes your dictation to text on-device, using Apple's Speech recognition. Audio is not sent anywhere.</string>
 </dict>
 </plist>
