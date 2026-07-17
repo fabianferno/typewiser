@@ -74,3 +74,23 @@ private func freshDefaults() -> UserDefaults {
     #expect(cfg.draftModelPath == EngineConfig.gemmaDefault.draftModelPath,
             "an untouched field must keep falling back to the default")
 }
+
+@Test func cloudProviderDefaultsToBedrockAndRoundTrips() {
+    let d = freshDefaults()
+    #expect(SettingsStore(defaults: d).cloudProvider == .bedrock,
+            "Bedrock is the original cloud path; keep it the default")
+    SettingsStore(defaults: d).cloudProvider = .anthropic
+    #expect(SettingsStore(defaults: d).cloudProvider == .anthropic)
+}
+
+@Test func cloudModelsDefaultToSmallFastModelsAndOverride() {
+    let d = freshDefaults()
+    #expect(SettingsStore(defaults: d).openAIModel == SettingsStore.defaultOpenAIModel)
+    #expect(SettingsStore(defaults: d).anthropicModel == SettingsStore.defaultAnthropicModel)
+
+    let s = SettingsStore(defaults: d)
+    s.openAIModel = "gpt-5"
+    s.anthropicModel = "claude-opus-4-8"
+    #expect(SettingsStore(defaults: d).openAIModel == "gpt-5")
+    #expect(SettingsStore(defaults: d).anthropicModel == "claude-opus-4-8")
+}

@@ -16,8 +16,15 @@ struct SettingsView: View {
     @State private var llamaBinaryPath = ""
     @State private var modelPath = ""
     @State private var draftModelPath = ""
+    @State private var cloudProvider: CloudProvider = .bedrock
+    @State private var openAIKeyField = ""
+    @State private var anthropicKeyField = ""
+    @State private var openAIModel = ""
+    @State private var anthropicModel = ""
 
     private let credentials = KeychainCredentialStore()
+    private let openAIStore = KeychainAPIKeyStore(provider: .openai)
+    private let anthropicStore = KeychainAPIKeyStore(provider: .anthropic)
 
     var body: some View {
         TabView {
@@ -35,6 +42,9 @@ struct SettingsView: View {
             llamaBinaryPath = model.settings.llamaBinaryPath
             modelPath = model.settings.modelPath
             draftModelPath = model.settings.draftModelPath
+            cloudProvider = model.settings.cloudProvider
+            openAIModel = model.settings.openAIModel
+            anthropicModel = model.settings.anthropicModel
         }
     }
 
@@ -112,8 +122,32 @@ struct SettingsView: View {
 
     private var cloudTab: some View {
         Form {
-            Text("Used when the engine is set to Cloud. Stored in your macOS Keychain — never in a file.")
-                .font(.caption).foregroundStyle(.secondary)
+            Section {
+                Picker("Provider", selection: $cloudProvider) {
+                    Text("AWS Bedrock").tag(CloudProvider.bedrock)
+                    Text("OpenAI").tag(CloudProvider.openai)
+                    Text("Anthropic").tag(CloudProvider.anthropic)
+                }
+                Text("Used when the engine is set to Cloud. Keys are stored in your macOS Keychain — never in a file.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            switch cloudProvider {
+            case .bedrock: bedrockFields
+            case .openai: openAIFields
+            case .anthropic: anthropicFields
+            }
+
+            Text(savedMessage).font(.caption).foregroundStyle(.secondary)
+        }
+        .formStyle(.grouped)
+        .onChange(of: cloudProvider) { _, new in model.settings.cloudProvider = new; savedMessage = "" }
+        .onChange(of: openAIModel) { _, new in model.settings.openAIModel = new }
+        .onChange(of: anthropicModel) { _, new in model.settings.anthropicModel = new }
+    }
+
+    private var bedrockFields: some View {
+        Section("AWS Bedrock") {
             TextField("AWS Access Key ID", text: $accessKey)
             SecureField("AWS Secret Access Key", text: $secretKey)
             Text("Region: ap-south-1 · Model: apac.amazon.nova-lite-v1:0")
@@ -123,27 +157,50 @@ struct SettingsView: View {
                     let c = AWSCredentials(accessKeyID: accessKey.trimmingCharacters(in: .whitespaces),
                                            secretAccessKey: secretKey.trimmingCharacters(in: .whitespaces),
                                            region: "ap-south-1")
-                    do {
-                        try credentials.save(c)
-                        accessKey = ""; secretKey = ""
-                        savedMessage = "Saved."
-                    } catch {
-                        savedMessage = "Failed: \(error)"
-                    }
+                    do { try credentials.save(c); accessKey = ""; secretKey = ""; savedMessage = "Saved." }
+                    catch { savedMessage = "Failed: \(error)" }
                 }
                 .disabled(accessKey.isEmpty || secretKey.isEmpty)
                 Button("Delete") {
-                    do {
-                        try credentials.delete()
-                        savedMessage = "Deleted."
-                    } catch {
-                        savedMessage = "Failed: \(error)"
-                    }
+                    do { try credentials.delete(); savedMessage = "Deleted." }
+                    catch { savedMessage = "Failed: \(error)" }
                 }
-                Text(savedMessage).font(.caption).foregroundStyle(.secondary)
             }
         }
-        .formStyle(.grouped)
+    }
+
+    private var openAIFields: some View {
+        Section("OpenAI") {
+            SecureField("API Key (sk-…)", text: $openAIKeyField)
+            TextField("Model", text: $openAIModel)
+            Text("Chat Completions API. A small, fast model is best for cleanup.")
+                .font(.caption).foregroundStyle(.secondary)
+            keyButtons(field: $openAIKeyField, store: openAIStore)
+        }
+    }
+
+    private var anthropicFields: some View {
+        Section("Anthropic") {
+            SecureField("API Key (sk-ant-…)", text: $anthropicKeyField)
+            TextField("Model", text: $anthropicModel)
+            Text("Messages API. Defaults to Claude Haiku 4.5 — fast and cheap for cleanup.")
+                .font(.caption).foregroundStyle(.secondary)
+            keyButtons(field: $anthropicKeyField, store: anthropicStore)
+        }
+    }
+
+    private func keyButtons(field: Binding<String>, store: KeychainAPIKeyStore) -> some View {
+        HStack {
+            Button("Save to Keychain") {
+                do { try store.save(field.wrappedValue.trimmingCharacters(in: .whitespaces)); field.wrappedValue = ""; savedMessage = "Saved." }
+                catch { savedMessage = "Failed: \(error)" }
+            }
+            .disabled(field.wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button("Delete") {
+                do { try store.delete(); savedMessage = "Deleted." }
+                catch { savedMessage = "Failed: \(error)" }
+            }
+        }
     }
 
     private var setupTab: some View { OnboardingView(model: model) }

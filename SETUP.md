@@ -52,11 +52,22 @@ Settings → **Engine** → *Transcribe with*:
 Cleanup (filler removal, grammar, name spelling) runs on an LLM. Pick the mode in
 the menu bar.
 
-### Option A — Cloud (AWS Bedrock)
+### Option A — Cloud (Bedrock, OpenAI, or Anthropic)
 
-No local model needed. In Settings → **Cloud**, enter your AWS Access Key ID and
-Secret Access Key (stored in the macOS Keychain, never a file). Defaults: region
-`ap-south-1`, model `apac.amazon.nova-lite-v1:0`.
+No local model needed. In Settings → **Cloud**, pick a provider and enter its
+credentials (stored in the macOS Keychain, never a file):
+
+- **AWS Bedrock** — Access Key ID + Secret Access Key. Region `ap-south-1`,
+  model `apac.amazon.nova-lite-v1:0`.
+- **OpenAI** — an API key (`sk-…`). Model is configurable; defaults to a small,
+  fast chat model.
+- **Anthropic** — an API key (`sk-ant-…`). Model is configurable; defaults to
+  Claude Haiku 4.5.
+
+Cleanup is a short, mechanical edit, so the small/fast default model on each
+provider is the right choice for latency and cost. Bump it to a larger model in
+Settings if you want. Changing provider or model takes effect immediately (the
+rewriter is chosen per dictation).
 
 ### Option B — Local (llama.cpp)
 

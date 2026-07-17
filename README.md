@@ -6,7 +6,7 @@ Speech-to-text runs **on-device** by default via Apple's Speech framework — no
 server, no model download, and audio never leaves your Mac. You can instead point
 it at a self-hosted whisper.cpp server (Settings → Engine). Cleanup — filler
 removal, grammar, self-correction resolution, name spelling — runs on an LLM,
-either locally (llama.cpp) or on AWS Bedrock.
+either locally (llama.cpp) or in the cloud (AWS Bedrock, OpenAI, or Anthropic).
 
 New here? See [`SETUP.md`](SETUP.md) for a from-scratch walkthrough, including the
 optional local llama.cpp rewrite engine.
@@ -76,8 +76,10 @@ This should not recur once you're signing with the certificate above.
   binary and model paths default to a `~/Models/Local` layout and are
   configurable in Settings → Engine — see [`SETUP.md`](SETUP.md).
 - **Cloud** kills the local `llama-server` process — reclaiming that RAM and
-  GPU — and rewrites via Bedrock, model `apac.amazon.nova-lite-v1:0` in
-  `ap-south-1`, signed with SigV4.
+  GPU — and rewrites via a hosted LLM. Pick the provider in Settings → Cloud:
+  **AWS Bedrock** (Nova Lite, SigV4-signed), **OpenAI** (Chat Completions), or
+  **Anthropic** (Messages API). Keys live in the macOS Keychain; the model is
+  configurable per provider and defaults to a small, fast one.
 - Switching modes in the menu bar tears down or spawns the process
   immediately; it isn't lazy.
 - If the app is force-quit or crashes while `llama-server` is running, the
@@ -119,7 +121,7 @@ VAD-segmented streaming endpoint — not anything the client can paper over.
 ## Tests
 
 ```bash
-swift test                                                  # 128 tests, 5 suites, no network/Keychain/model deps
+swift test                                                  # 142 tests, no network/model deps (Keychain round-trip uses a throwaway service)
 TYPEWISER_INTEGRATION=1 swift test --filter wavEncoderRoundTripIsAcceptedByRealServer  # opt-in: real whisper.cpp server (set TYPEWISER_WHISPER_ENDPOINT, defaults to localhost:8080), needs `say`+`ffmpeg`
 TYPEWISER_GOLDEN_LOCAL=1 swift test --filter goldenLocal    # opt-in: needs llama-server up on :8231
 TYPEWISER_GOLDEN_BEDROCK=1 swift test --filter goldenBedrock  # opt-in: hits real Bedrock, costs money, creds from Keychain or env

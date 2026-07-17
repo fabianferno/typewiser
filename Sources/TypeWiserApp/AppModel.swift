@@ -35,6 +35,8 @@ final class AppModel {
 
     let settings = SettingsStore()
     private let credentials = KeychainCredentialStore()
+    private let openAIKey = KeychainAPIKeyStore(provider: .openai)
+    private let anthropicKey = KeychainAPIKeyStore(provider: .anthropic)
     private let engine: EngineManager
     private let audio = AudioCapture()
     private let transcriber: Transcribing
@@ -96,6 +98,8 @@ final class AppModel {
         self.mode = settings.mode
         let settings = self.settings
         let credentials = self.credentials
+        let openAIKey = self.openAIKey
+        let anthropicKey = self.anthropicKey
 
         session = DictationSession(
             audio: audio,
@@ -113,8 +117,17 @@ final class AppModel {
                     // fast instead (no doomed network call), and let the menu bar / HUD
                     // note (see `hasCloudCredentials()` / `observePhases()`) make the
                     // missing configuration visible to the user.
-                    guard let c = credentials.load() else { return NoCredentialsRewriter() }
-                    return BedrockRewriter(credentials: c)
+                    switch settings.cloudProvider {
+                    case .bedrock:
+                        guard let c = credentials.load() else { return NoCredentialsRewriter() }
+                        return BedrockRewriter(credentials: c)
+                    case .openai:
+                        guard let k = openAIKey.load() else { return NoCredentialsRewriter() }
+                        return OpenAIRewriter(apiKey: k, model: settings.openAIModel)
+                    case .anthropic:
+                        guard let k = anthropicKey.load() else { return NoCredentialsRewriter() }
+                        return AnthropicRewriter(apiKey: k, model: settings.anthropicModel)
+                    }
                 }
             },
             context: { AXContextReader(nameDictionary: settings.nameDictionary) },
@@ -167,7 +180,13 @@ final class AppModel {
     /// reflected immediately, without needing to observe the Keychain for
     /// changes. Used by the menu bar status text and the HUD note so the user
     /// can always tell whether Cloud cleanup is actually configured.
-    func hasCloudCredentials() -> Bool { credentials.load() != nil }
+    func hasCloudCredentials() -> Bool {
+        switch settings.cloudProvider {
+        case .bedrock: return credentials.load() != nil
+        case .openai: return openAIKey.load() != nil
+        case .anthropic: return anthropicKey.load() != nil
+        }
+    }
 
     private func handle(_ action: HotkeyAction) async {
         switch action {

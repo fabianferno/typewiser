@@ -4,6 +4,13 @@ public enum EngineMode: String, Codable, Sendable {
     case local, cloud
 }
 
+/// Which hosted LLM cleans up the transcript when the engine is set to Cloud.
+/// `bedrock` is the original AWS path; `openai` and `anthropic` call those
+/// providers' APIs directly with a user-supplied key.
+public enum CloudProvider: String, Codable, Sendable, CaseIterable {
+    case bedrock, openai, anthropic
+}
+
 /// Where speech-to-text runs. `apple` uses the on-device Speech framework — no
 /// server, no model download, works offline after the first use — and is the
 /// default so a fresh install transcribes out of the box. `remote` posts audio
@@ -25,7 +32,13 @@ public final class SettingsStore: @unchecked Sendable {
         static let llamaBinaryPath = "typewiser.llamaBinaryPath"
         static let modelPath = "typewiser.modelPath"
         static let draftModelPath = "typewiser.draftModelPath"
+        static let cloudProvider = "typewiser.cloudProvider"
+        static let openAIModel = "typewiser.openAIModel"
+        static let anthropicModel = "typewiser.anthropicModel"
     }
+
+    public static let defaultOpenAIModel = "gpt-4o-mini"
+    public static let defaultAnthropicModel = "claude-haiku-4-5"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -88,5 +101,26 @@ public final class SettingsStore: @unchecked Sendable {
         EngineConfig(binaryPath: llamaBinaryPath,
                      modelPath: modelPath,
                      draftModelPath: draftModelPath)
+    }
+
+    public var cloudProvider: CloudProvider {
+        get { CloudProvider(rawValue: defaults.string(forKey: Key.cloudProvider) ?? "") ?? .bedrock }
+        set { defaults.set(newValue.rawValue, forKey: Key.cloudProvider) }
+    }
+
+    public var openAIModel: String {
+        get {
+            let v = defaults.string(forKey: Key.openAIModel) ?? ""
+            return v.isEmpty ? Self.defaultOpenAIModel : v
+        }
+        set { defaults.set(newValue, forKey: Key.openAIModel) }
+    }
+
+    public var anthropicModel: String {
+        get {
+            let v = defaults.string(forKey: Key.anthropicModel) ?? ""
+            return v.isEmpty ? Self.defaultAnthropicModel : v
+        }
+        set { defaults.set(newValue, forKey: Key.anthropicModel) }
     }
 }
