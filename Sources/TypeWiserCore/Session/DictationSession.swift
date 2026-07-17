@@ -33,6 +33,28 @@ public actor DictationSession {
     /// "Transcribing…". Reset at the top of `begin()` for the next cycle.
     private var isEnding = false
 
+    /// Read once at `begin()` rather than at `end()`, purely for latency.
+    ///
+    /// `ContextReading.read()` is a *synchronous, blocking* Accessibility
+    /// round-trip into whatever app has focus. Called from `end()` it landed
+    /// squarely on the critical path — the user has already released the key
+    /// and is watching the HUD — and AX-hostile hosts (Electron, JVM apps) can
+    /// stall it for tens to hundreds of ms with no timeout available to us.
+    /// Called from `begin()`, the exact same work overlaps with the user still
+    /// speaking and costs them nothing.
+    ///
+    /// Safe because nothing this reads changes during a hold: the focused
+    /// element and frontmost app are fixed for the duration. Reading at
+    /// `begin()` is arguably the more correct capture point anyway — it
+    /// records where the user aimed the dictation, not wherever focus drifted
+    /// to by the time transcription came back.
+    ///
+    /// Left `.empty` if `end()` somehow arrives before `begin()` captured
+    /// (only reachable if the key is released while `audio.start()` is still
+    /// awaiting). That degrades to a context-free rewrite — exactly what
+    /// already happens in apps that expose nothing over AX — never a failure.
+    private var capturedContext: RewriteContext = .empty
+
     public init(audio: AudioCapturing,
                 whisper: Transcribing,
                 rewriter: @escaping @Sendable () -> Rewriter,
@@ -54,6 +76,7 @@ public actor DictationSession {
 
     public func begin() async {
         isEnding = false
+        capturedContext = .empty
         do {
             try await audio.start()
         } catch {
@@ -62,6 +85,10 @@ public actor DictationSession {
         }
         emit(.recording(interim: ""))
         startInterimLoop()
+        // Deliberately last: emitting `.recording` and arming the interim loop
+        // first means the HUD is already up before this blocking AX read runs,
+        // so a slow host delays neither. See `capturedContext`.
+        capturedContext = makeContext().read()
     }
 
     /// Polls the single server slot without a timer: the next request is issued
@@ -124,10 +151,9 @@ public actor DictationSession {
         }
 
         emit(.rewriting)
-        let ctx = makeContext().read()
         // Any rewriter failure degrades to the raw transcript. Losing the user's
         // words is never an acceptable outcome.
-        let final = (try? await makeRewriter().rewrite(trimmed, options: makeOptions(), context: ctx)) ?? trimmed
+        let final = (try? await makeRewriter().rewrite(trimmed, options: makeOptions(), context: capturedContext)) ?? trimmed
 
         await injector.insert(final)
         emit(.inserted(final))
