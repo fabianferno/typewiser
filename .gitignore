@@ -6,3 +6,5 @@ xcuserdata/
 .env
 *.pem
 credentials
+.superpowers/
+build/
