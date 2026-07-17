@@ -352,8 +352,13 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
 // was when the session was built, requiring an app restart for a newly
 // added name to take effect. This test fails if `context:` is ever reverted
 // to a frozen instance: it asserts both that the factory is invoked once
-// per `end()` (not once ever) and that the rewriter receives the factory's
+// per cycle (not once ever) and that the rewriter receives the factory's
 // CURRENT output on the second cycle, not the first cycle's snapshot.
+//
+// The factory is invoked from `begin()`, not `end()` — the read is a
+// blocking AX call kept off the post-release critical path (see
+// `DictationSession.capturedContext`). Per-cycle freshness is unaffected:
+// a name added in Settings still takes effect on the very next dictation.
 @Test func contextFactoryIsInvokedFreshEachCycle() async {
     let factory = FakeContextFactory()
     factory.current = RewriteContext(nameDictionary: ["Ada"])
@@ -378,10 +383,38 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
     await s.begin()
     await s.end()
 
-    #expect(factory.callCount == 2, "the factory must be invoked once per end(), not captured once at init")
+    #expect(factory.callCount == 2, "the factory must be invoked once per cycle, not captured once at init")
     #expect(rewriter.receivedContexts.count == 2)
     #expect(rewriter.receivedContexts.first?.nameDictionary == ["Ada"],
             "the first cycle should see the factory's output at that time")
     #expect(rewriter.receivedContexts.last?.nameDictionary == ["Grace"],
             "the second cycle must see the UPDATED factory output, not a value frozen at session construction")
+}
+
+/// `ContextReading.read()` is a blocking Accessibility round-trip that can
+/// stall for hundreds of ms in Electron/JVM hosts. Read from `end()` it sits
+/// on the critical path, between the user releasing the key and their text
+/// appearing; read from `begin()` it overlaps with them still speaking and is
+/// free. Nothing it reads (focused element, frontmost app) changes during a
+/// hold, so this costs nothing to move. Fails if it is ever moved back.
+@Test func contextIsReadAtBeginNotOnThePostReleaseCriticalPath() async {
+    let factory = FakeContextFactory()
+    factory.current = RewriteContext(nameDictionary: ["Ada"])
+    let rewriter = RecordingRewriter()
+    let s = DictationSession(
+        audio: FakeAudio(),
+        whisper: FakeWhisper(),
+        rewriter: { rewriter },
+        context: { factory.make() },
+        injector: TextInjector(pasteboard: FakePasteboard(), keys: FakeKeys(), restoreDelay: .milliseconds(1)),
+        options: { .default }
+    )
+
+    await s.begin()
+    #expect(factory.callCount == 1, "the AX read must already have happened by the end of begin()")
+
+    await s.end()
+    #expect(factory.callCount == 1, "end() must reuse the context captured at begin(), never re-read it")
+    #expect(rewriter.receivedContexts.first?.nameDictionary == ["Ada"],
+            "the context captured at begin() must be the one handed to the rewriter")
 }

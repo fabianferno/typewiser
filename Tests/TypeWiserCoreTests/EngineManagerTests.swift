@@ -30,6 +30,13 @@ import Testing
     #expect(args.contains("draft-mtp"))
 }
 
+@Test func argumentsDisableReasoningBecauseItIsPureLatency() async {
+    let args = await EngineManager().arguments()
+    let idx = args.firstIndex(of: "--reasoning")
+    #expect(idx != nil, "the flag defaults to 'auto', which enables thinking from the template")
+    #expect(args[idx! + 1] == "off")
+}
+
 @Test func argumentsBindLocalhostOnConfiguredPort() async {
     let args = await EngineManager().arguments()
     let portIdx = args.firstIndex(of: "--port")!

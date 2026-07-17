@@ -55,12 +55,24 @@ public actor EngineManager {
 
     /// Deliberately omits `--mmproj` (vision projector — unused here) and uses
     /// `-c 4096` rather than 65536: our prompt is one short utterance.
+    ///
+    /// `--reasoning off` is a latency decision, not a quality one. The flag
+    /// defaults to `auto`, which enables thinking whenever the model's chat
+    /// template declares it — so a reasoning-variant model burns its
+    /// chain-of-thought against our token budget *before* emitting any
+    /// `content`, and every one of those tokens is time the user spends
+    /// staring at the HUD. Transcript cleanup is a local, mechanical edit; it
+    /// does not need deliberation. Turning reasoning off also removes the
+    /// failure mode that forced `max_tokens` up to 2560 in
+    /// `LocalLlamaRewriter`: thinking consuming the whole budget and leaving
+    /// `content` empty.
     public func arguments() -> [String] {
         [
             "-m", config.modelPath,
             "--model-draft", config.draftModelPath,
             "--spec-type", "draft-mtp",
             "--spec-draft-n-max", "3",
+            "--reasoning", "off",
             "-ngl", "999",
             "-fa", "on",
             "-c", String(config.contextSize),
