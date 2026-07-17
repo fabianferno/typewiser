@@ -66,13 +66,25 @@ Everything else above — rows 1 through 11 in the table — requires a human.
 These are here because each one shipped as a real bug that no automated test
 could catch — they only exist in the gap between real permissions and a real GUI.
 
+- [ ] **With Accessibility GRANTED, the menu bar icon still opens its panel.**
+      This is the row that matters most, and the one whose absence let the bug
+      below ship twice. Registering `NSEvent.addGlobalMonitorForEvents` — for
+      any event type, even with an empty handler — silently stops the
+      `MenuBarExtra(.window)` popover from opening. It was first diagnosed as an
+      *untrusted-only* problem, but that was an artifact of only ever testing
+      the untrusted path, which is the one where the monitors are never
+      registered. On the trusted path the monitors do register and the popover
+      is just as dead — locking the user out of the app's only UI. Key events
+      now come from a listen-only `CGEventTap` instead
+      (`hotkeyMonitorNeverUsesNSEventGlobalMonitors` guards the source).
+      **Both halves must pass in the same run, while trusted:** the icon opens
+      its panel, AND holding 🌐 still dictates. Either alone is what a
+      half-verified fix looks like.
 - [ ] **With Accessibility DENIED, the menu bar icon still opens its panel.**
-      Registering `NSEvent.addGlobalMonitorForEvents` while untrusted poisons the
-      app's event delivery and the popover silently stops opening — which locked
-      the user out entirely, since that menu is the only place to grant
-      permission. `HotkeyMonitor.start()` guards on `AXIsProcessTrusted()` for
-      exactly this reason. Verify by: `tccutil reset Accessibility
-      xyz.crevn.typewiser`, relaunch, deny the prompt, then click the mic icon.
+      The menu is the only place to grant permission, so a user who denies the
+      prompt must still be able to reach it. Verify by: `tccutil reset
+      Accessibility xyz.crevn.typewiser`, relaunch, deny the prompt, then click
+      the icon.
 - [ ] **The menu states plainly that dictation is disabled when untrusted**, and
       offers a working "Open System Settings…" deep link (macOS will not re-show
       a prompt the user already denied).

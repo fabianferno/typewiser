@@ -110,13 +110,11 @@ final class AppModel {
             monitor.start()
         } else {
             // First launch (or permission revoked since): ask now, at
-            // launch, rather than waiting for the user to find the menu —
-            // the menu is unreachable in the first place if `monitor.start()`
-            // ever registered while untrusted (see the guard in
-            // `HotkeyMonitor.start()`). If macOS already showed this prompt
-            // once and was denied, this call is a silent no-op; the menu
-            // bar / Setup tab UI is what carries the "grant it manually in
-            // System Settings" message for that case.
+            // launch, rather than waiting for the user to find the menu.
+            // If macOS already showed this prompt once and was denied, this
+            // call is a silent no-op; the menu bar / Setup tab UI is what
+            // carries the "grant it manually in System Settings" message for
+            // that case.
             HotkeyMonitor.requestAccessibilityPermission()
             watchForAccessibilityGrant()
         }

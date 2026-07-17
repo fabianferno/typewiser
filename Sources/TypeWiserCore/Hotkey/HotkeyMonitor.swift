@@ -2,16 +2,20 @@ import AppKit
 import ApplicationServices
 import Foundation
 
-/// Bridges global NSEvent taps into the pure `HotkeyStateMachine`.
+/// Feeds the pure `HotkeyStateMachine` from two sources: a 50ms poll of the
+/// current modifier flags (the Fn hold itself) and a listen-only `CGEventTap`
+/// (whether some *other* key is also down).
 ///
 /// All decision logic lives in the state machine so it can be tested; this class
 /// is only plumbing.
 public final class HotkeyMonitor: @unchecked Sendable {
     private var machine = HotkeyStateMachine()
     private let onAction: @Sendable (HotkeyAction) -> Void
-    private var flagsMonitor: Any?
-    private var keyMonitor: Any?
     private var pollTimer: Timer?
+    private var eventTap: CFMachPort?
+    private var tapSource: CFRunLoopSource?
+    /// Written from the event tap callback and read by the poll timer. Both run
+    /// on the main run loop, so there is no race despite the plain `Bool`.
     private var otherKeyDown = false
 
     public init(onAction: @escaping @Sendable (HotkeyAction) -> Void) {
@@ -42,50 +46,92 @@ public final class HotkeyMonitor: @unchecked Sendable {
         NSWorkspace.shared.open(url)
     }
 
-    /// Whether the global monitors are currently registered. `false` both
-    /// before the first successful `start()` and whenever `start()` has
-    /// refused to register because Accessibility isn't trusted yet.
-    public var isMonitoring: Bool { flagsMonitor != nil }
+    /// Whether the hotkey is currently being observed. `false` both before the
+    /// first successful `start()` and whenever `start()` has refused to
+    /// register because Accessibility isn't trusted yet.
+    public var isMonitoring: Bool { pollTimer != nil }
 
+    /// DO NOT reintroduce `NSEvent.addGlobalMonitorForEvents` here.
+    ///
+    /// Registering an NSEvent global monitor — for [.keyDown, .keyUp] or
+    /// [.flagsChanged], even with an empty handler — silently stops this app's
+    /// `MenuBarExtra(.window)` popover from opening. The popover is the app's
+    /// only route to Settings or to a permission prompt, so this locks the
+    /// user out of the app entirely.
+    ///
+    /// This was originally diagnosed as an *untrusted-only* problem and
+    /// "fixed" by refusing to register while `!AXIsProcessTrusted()`. That
+    /// conclusion was wrong, and the bug outlived it: the untrusted path was
+    /// the only one ever verified, and it happens to be the path where the
+    /// monitors are never registered at all. On the trusted path — the normal
+    /// one, for any user who has actually granted Accessibility — the monitors
+    /// do register and the popover is just as dead. Trust state is irrelevant;
+    /// the monitors are the cause.
+    ///
+    /// A listen-only `CGEventTap` delivers the same key events through a
+    /// CFRunLoop source instead of AppKit's event dispatch, and coexists with
+    /// the popover. Verified by hand on macOS 26.5 (trusted): with the tap,
+    /// both the popover and Fn-hold dictation work; swapping only the tap back
+    /// for global monitors kills the popover again.
     public func start() {
-        guard flagsMonitor == nil else { return }
+        guard pollTimer == nil else { return }
 
-        // DO NOT remove this guard. Established by bisection with a real,
-        // Accessibility-denied user: calling
-        // `NSEvent.addGlobalMonitorForEvents` at all — for either
-        // [.keyDown, .keyUp] or [.flagsChanged], even with a completely
-        // empty handler — while Accessibility permission is NOT granted
-        // poisons this app's event delivery so that the MenuBarExtra
-        // popover silently stops opening. That popover is the only UI the
-        // app has to request permission or reach Settings, so registering
-        // here while untrusted deadlocks the user out of the app entirely.
-        // Every other candidate (dynamic systemImage, a Settings scene,
-        // SettingsLink, a 50ms Timer, AVAudioEngine(), the `ps` shell-out,
-        // spawning llama-server) was ruled out one at a time; only this
-        // registration reproduces the failure. Skipping registration until
-        // `AXIsProcessTrusted()` is true is the fix — `AppModel` is
-        // responsible for calling `start()` again once permission is
-        // granted (it polls for this).
+        // Both an event tap and our synthesized ⌘V require Accessibility;
+        // there is nothing useful to register without it. `AppModel` calls
+        // `start()` again once permission is granted (it polls for this).
         guard AXIsProcessTrusted() else { return }
 
-        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
-            self?.otherKeyDown = (event.type == .keyDown)
-            self?.feed(functionHeld: event.modifierFlags.contains(.function),
-                       timestamp: event.timestamp)
-        }
+        startEventTap()
 
-        flagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.flagsChanged]) { [weak self] event in
-            self?.feed(functionHeld: event.modifierFlags.contains(.function),
-                       timestamp: event.timestamp)
-        }
-
-        // flagsChanged only fires on transitions, so a hold emits no further
-        // events. Poll so the 150ms threshold can actually be crossed.
+        // `NSEvent.modifierFlags` is a static read of the *current* modifier
+        // state and needs no monitor of any kind. This poll is what lets a
+        // bare Fn hold cross `minimumHold`: flag transitions alone emit no
+        // events while the key is simply held down.
         pollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             guard let self else { return }
             let held = NSEvent.modifierFlags.contains(.function)
             self.feed(functionHeld: held, timestamp: ProcessInfo.processInfo.systemUptime)
         }
+    }
+
+    /// Tracks whether a non-modifier key is down, which is the only thing the
+    /// state machine needs key events for: macOS sets the `.function` flag for
+    /// Fn+F5 and the arrow keys too, so Fn must be held *alone* to start a
+    /// recording.
+    ///
+    /// Listen-only: the tap never modifies or swallows events, it only
+    /// observes them.
+    private func startEventTap() {
+        let mask = (1 << CGEventType.keyDown.rawValue) | (1 << CGEventType.keyUp.rawValue)
+        guard let tap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .listenOnly,
+            eventsOfInterest: CGEventMask(mask),
+            callback: { _, type, event, refcon in
+                guard let refcon else { return Unmanaged.passUnretained(event) }
+                let me = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
+                switch type {
+                case .keyDown: me.otherKeyDown = true
+                case .keyUp: me.otherKeyDown = false
+                default: break
+                }
+                return Unmanaged.passUnretained(event)
+            },
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            // Tap creation can fail even when trusted (e.g. the grant was
+            // revoked between the check and here). Dictation still works off
+            // the poll alone; only the Fn+other-key guard is lost, so this
+            // degrades rather than dying.
+            return
+        }
+
+        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        eventTap = tap
+        tapSource = source
     }
 
     private func feed(functionHeld: Bool, timestamp: TimeInterval) {
@@ -96,9 +142,16 @@ public final class HotkeyMonitor: @unchecked Sendable {
     }
 
     public func stop() {
-        if let m = flagsMonitor { NSEvent.removeMonitor(m); flagsMonitor = nil }
-        if let m = keyMonitor { NSEvent.removeMonitor(m); keyMonitor = nil }
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            if let source = tapSource {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+            }
+            eventTap = nil
+            tapSource = nil
+        }
         pollTimer?.invalidate()
         pollTimer = nil
+        otherKeyDown = false
     }
 }
