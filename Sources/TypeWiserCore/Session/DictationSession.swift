@@ -80,9 +80,11 @@ public actor DictationSession {
         do {
             try await audio.start()
         } catch {
+            TWLog.session.error("audio.start failed: \(String(describing: error), privacy: .public)")
             emit(.error("Microphone unavailable"))
             return
         }
+        TWLog.session.info("dictation began")
         emit(.recording(interim: ""))
         startInterimLoop()
         // Deliberately last: emitting `.recording` and arming the interim loop
@@ -134,28 +136,39 @@ public actor DictationSession {
         await whisper.cancelInFlight()
 
         let samples = await audio.currentSamples()
+        TWLog.session.info("dictation ended: \(samples.count) samples (~\(samples.count / 16_000)s)")
         emit(.transcribing)
 
         let transcript: String
         do {
             transcript = try await whisper.transcribe(pcm16: samples)
         } catch {
+            TWLog.stt.error("transcription failed: \(String(describing: error), privacy: .public)")
             emit(.error("Transcription failed: \(error)"))
             return
         }
 
         let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
+            TWLog.session.info("empty transcript, nothing to insert")
             emit(.idle)
             return
         }
 
         emit(.rewriting)
         // Any rewriter failure degrades to the raw transcript. Losing the user's
-        // words is never an acceptable outcome.
-        let final = (try? await makeRewriter().rewrite(trimmed, options: makeOptions(), context: capturedContext)) ?? trimmed
+        // words is never an acceptable outcome — but the failure itself must be
+        // logged, or cleanup silently stops working with zero diagnostic trail.
+        let final: String
+        do {
+            final = try await makeRewriter().rewrite(trimmed, options: makeOptions(), context: capturedContext)
+        } catch {
+            TWLog.rewrite.error("rewrite failed, falling back to raw transcript: \(String(describing: error), privacy: .public)")
+            final = trimmed
+        }
 
         await injector.insert(final)
+        TWLog.session.info("inserted \(final.count) chars")
         emit(.inserted(final))
     }
 }

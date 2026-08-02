@@ -85,10 +85,12 @@ public actor EngineManager {
     public func start() async {
         guard state == .stopped || isFailed else { return }
         guard FileManager.default.isExecutableFile(atPath: config.binaryPath) else {
+            TWLog.engine.error("start refused: llama-server not executable at \(self.config.binaryPath, privacy: .public)")
             state = .failed("llama-server not found at \(config.binaryPath)")
             return
         }
         guard FileManager.default.fileExists(atPath: config.modelPath) else {
+            TWLog.engine.error("start refused: model missing at \(self.config.modelPath, privacy: .public)")
             state = .failed("model not found at \(config.modelPath)")
             return
         }
@@ -97,17 +99,30 @@ public actor EngineManager {
         let myGeneration = generation
 
         state = .starting
+        TWLog.engine.info("starting llama-server on port \(self.config.port) with model \(self.config.modelPath, privacy: .public)")
         let p = Process()
         p.executableURL = URL(fileURLWithPath: config.binaryPath)
         p.arguments = arguments()
-        p.standardOutput = FileHandle.nullDevice
-        p.standardError = FileHandle.nullDevice
+        // The child's own diagnostics (model load errors, Metal failures, port
+        // conflicts) only exist on its stdout/stderr — capture them to
+        // ~/Library/Logs/TypeWiser/engine.log instead of discarding them.
+        if let logHandle = EngineLogFile.handleForAppending() {
+            EngineLogFile.writeSessionHeader(to: logHandle, arguments: [config.binaryPath] + arguments())
+            p.standardOutput = logHandle
+            p.standardError = logHandle
+        } else {
+            TWLog.engine.error("could not open \(EngineLogFile.url.path, privacy: .public); engine output will be discarded")
+            p.standardOutput = FileHandle.nullDevice
+            p.standardError = FileHandle.nullDevice
+        }
         do {
             try p.run()
         } catch {
+            TWLog.engine.error("failed to launch llama-server: \(error.localizedDescription, privacy: .public)")
             state = .failed("failed to launch: \(error.localizedDescription)")
             return
         }
+        TWLog.engine.info("llama-server launched, pid \(p.processIdentifier)")
         process = p
         Self.writePidFile(pid: p.processIdentifier, port: config.port)
         await waitForHealth(generation: myGeneration)
@@ -126,27 +141,34 @@ public actor EngineManager {
     /// by the generation guard, never misreported as "exited during startup".
     private func waitForHealth(generation myGeneration: Int) async {
         let url = URL(string: "http://127.0.0.1:\(config.port)/health")!
-        let deadline = Date().addingTimeInterval(90)
+        let started = Date()
+        let deadline = started.addingTimeInterval(90)
         while Date() < deadline {
             guard generation == myGeneration else { return }
             guard let p = process, p.isRunning else {
+                TWLog.engine.error("llama-server exited during startup — see \(EngineLogFile.url.path, privacy: .public)")
                 state = .failed("llama-server exited during startup")
                 return
             }
             if let (_, resp) = try? await session.data(from: url),
                (resp as? HTTPURLResponse)?.statusCode == 200 {
                 guard generation == myGeneration else { return }
+                TWLog.engine.info("llama-server healthy after \(Int(Date().timeIntervalSince(started)))s")
                 state = .ready
                 return
             }
             try? await Task.sleep(for: .seconds(1))
         }
         guard generation == myGeneration else { return }
+        TWLog.engine.error("llama-server not healthy within 90s — see \(EngineLogFile.url.path, privacy: .public)")
         state = .failed("llama-server did not become healthy within 90s")
     }
 
     public func stop() {
         generation += 1
+        if let p = process {
+            TWLog.engine.info("stopping llama-server, pid \(p.processIdentifier)")
+        }
         process?.terminate()
         process = nil
         state = .stopped
@@ -247,6 +269,7 @@ public actor EngineManager {
         else { return }
         guard fullCommand.contains(config.modelPath) else { return }
 
+        TWLog.engine.info("reaping orphaned llama-server, pid \(record.pid)")
         kill(pid, SIGTERM)
     }
 

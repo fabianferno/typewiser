@@ -111,3 +111,19 @@ Runs entirely on your Mac; nothing is sent to the cloud. You provide a
   (first use can take a moment on a fresh macOS install).
 - **Local engine never becomes ready** — check the binary path and that
   `llama-server` runs on its own from a terminal with the same model.
+
+## Logs
+
+TypeWiser logs to the macOS unified log under the subsystem
+`xyz.crevn.typewiser` (categories: `app`, `engine`, `session`, `stt`,
+`rewrite`). Transcripts are never logged. To view:
+
+```sh
+log show --last 1h --predicate 'subsystem == "xyz.crevn.typewiser"'
+# or stream live:
+log stream --predicate 'subsystem == "xyz.crevn.typewiser"'
+```
+
+The local `llama-server` child's own stdout/stderr (model load errors, Metal
+failures, port conflicts) is captured to `~/Library/Logs/TypeWiser/engine.log`,
+rotated to `engine.log.1` once it exceeds 5 MB.
