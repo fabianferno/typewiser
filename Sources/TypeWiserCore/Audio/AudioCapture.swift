@@ -125,7 +125,13 @@ public actor AudioCapture: AudioCapturing {
 
         let input = engine.inputNode
         let inputFormat = input.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0 else { throw AudioError.noInput }
+        let device = AudioDevice.currentInput()
+        TWLog.audio.info(
+            "input: \(device?.name ?? "unknown", privacy: .public)\(device?.isBluetooth == true ? " (bluetooth)" : "", privacy: .public), \(inputFormat.sampleRate)Hz, \(inputFormat.channelCount)ch")
+        guard inputFormat.sampleRate > 0 else {
+            TWLog.audio.error("no input device (sample rate 0)")
+            throw AudioError.noInput
+        }
 
         guard let target = AVAudioFormat(commonFormat: .pcmFormatFloat32,
                                          sampleRate: 16000, channels: 1, interleaved: false),

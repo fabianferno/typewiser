@@ -49,7 +49,9 @@ final class AppModel {
     private var hudHideTask: Task<Void, Never>?
 
     init() {
-        self.hasAccessibility = HotkeyMonitor.hasAccessibilityPermission()
+        let trusted = HotkeyMonitor.hasAccessibilityPermission()
+        self.hasAccessibility = trusted
+        TWLog.app.info("launched — accessibility: \(trusted), speech authorized: \(AppleSpeechTranscriber.isAuthorized)")
 
         // Engine (llama-server) paths and the transcriber are both built from
         // saved settings so a fresh clone can retarget them without a rebuild.
@@ -166,6 +168,7 @@ final class AppModel {
                 try? await Task.sleep(for: .seconds(2))
                 guard let self else { return }
                 if HotkeyMonitor.hasAccessibilityPermission() {
+                    TWLog.app.info("accessibility granted; starting hotkey monitor")
                     self.hasAccessibility = true
                     self.monitor.start()
                     return
@@ -255,6 +258,7 @@ final class AppModel {
 
     /// Local spawns llama-server; Cloud kills it to reclaim ~17GB of RAM and the GPU.
     func applyMode() async {
+        TWLog.app.info("applying mode: \(String(describing: self.mode), privacy: .public)")
         switch mode {
         case .local:
             await engine.start()
@@ -262,5 +266,6 @@ final class AppModel {
             await engine.stop()
         }
         engineState = await engine.state
+        TWLog.app.info("engine state: \(String(describing: self.engineState), privacy: .public)")
     }
 }
