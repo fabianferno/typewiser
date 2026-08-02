@@ -136,15 +136,25 @@ public actor DictationSession {
         await whisper.cancelInFlight()
 
         let samples = await audio.currentSamples()
-        TWLog.session.info("dictation ended: \(samples.count) samples (~\(samples.count / 16_000)s)")
+        // Loudness, not content: RMS and peak are the only way to tell a
+        // "recognizer rejected real speech" failure apart from a "the mic
+        // handed us silence" one. Both are scalars — nothing about *what* was
+        // said can be recovered from them.
+        let rms = AudioCapture.rms(samples)
+        let peak = samples.map { abs(Int32($0)) }.max() ?? 0
+        TWLog.session.info(
+            "dictation ended: \(samples.count) samples (~\(samples.count / 16_000)s), rms \(rms, format: .fixed(precision: 5)), peak \(peak)/32767")
+        CaptureDump.saveIfEnabled(samples)   // no-op unless the user opted in
         emit(.transcribing)
 
         let transcript: String
         do {
             transcript = try await whisper.transcribe(pcm16: samples)
         } catch {
-            TWLog.stt.error("transcription failed: \(String(describing: error), privacy: .public)")
-            emit(.error("Transcription failed: \(error)"))
+            let input = AudioDevice.currentInput()
+            TWLog.stt.error(
+                "transcription failed on \(input?.name ?? "unknown input", privacy: .public)\(input?.isBluetooth == true ? " (bluetooth)" : "", privacy: .public): \(String(describing: error), privacy: .public)")
+            emit(.error(TranscriptionFailureMessage.text(for: error, input: input)))
             return
         }
 

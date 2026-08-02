@@ -109,6 +109,12 @@ Runs entirely on your Mac; nothing is sent to the cloud. You provide a
 - **Dictation transcribes nothing (Apple mode)** — confirm Speech Recognition is
   allowed in System Settings, and that the on-device model finished downloading
   (first use can take a moment on a fresh macOS install).
+- **"Didn't catch any speech from …"** — the recognizer read the audio and found
+  nothing it could transcribe. This is nearly always the microphone rather than
+  TypeWiser. Bluetooth headsets are the usual culprit: opening their mic drops
+  them into a low-quality bidirectional mode, which can yield audio that is loud
+  but untranscribable. Switch System Settings → Sound → Input to the built-in
+  microphone and try again.
 - **Local engine never becomes ready** — check the binary path and that
   `llama-server` runs on its own from a terminal with the same model.
 
@@ -127,3 +133,19 @@ log stream --predicate 'subsystem == "xyz.crevn.typewiser"'
 The local `llama-server` child's own stdout/stderr (model load errors, Metal
 failures, port conflicts) is captured to `~/Library/Logs/TypeWiser/engine.log`,
 rotated to `engine.log.1` once it exceeds 5 MB.
+
+Each dictation logs its input device, audio duration, RMS and peak level, so a
+"no speech" failure can be told apart from a silent or absent microphone.
+
+### Recording captures (opt-in)
+
+To debug a transcription problem, TypeWiser can save the exact audio it handed
+to the recognizer so it can be replayed offline:
+
+```sh
+mkdir -p ~/Library/Logs/TypeWiser/captures
+```
+
+Every dictation then writes a 16 kHz mono WAV there. **These files are
+recordings of your speech** — nothing enables this for you, and deleting the
+directory turns it off again.

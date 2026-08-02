@@ -20,6 +20,7 @@ public enum TWLog {
     public static let app = Logger(subsystem: subsystem, category: "app")
     public static let engine = Logger(subsystem: subsystem, category: "engine")
     public static let session = Logger(subsystem: subsystem, category: "session")
+    public static let audio = Logger(subsystem: subsystem, category: "audio")
     public static let stt = Logger(subsystem: subsystem, category: "stt")
     public static let rewrite = Logger(subsystem: subsystem, category: "rewrite")
 }

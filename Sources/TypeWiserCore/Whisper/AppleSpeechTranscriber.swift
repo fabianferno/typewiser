@@ -8,6 +8,18 @@ public enum AppleSpeechError: Error, Equatable {
     case unavailable
     case notAuthorized
     case cancelled
+    /// The recognizer read the audio and found nothing it could treat as
+    /// speech. Distinguished from a generic failure because it is almost
+    /// always a microphone problem rather than a software one, and so earns a
+    /// different message — see `SessionPhase` construction in `DictationSession`.
+    case noSpeechDetected
+}
+
+/// `kAFAssistantErrorDomain` 1110. Apple exposes no symbolic constant for it,
+/// and it arrives as a plain `NSError` through the recognition callback.
+private func isNoSpeechDetected(_ error: Error) -> Bool {
+    let ns = error as NSError
+    return ns.domain == "kAFAssistantErrorDomain" && ns.code == 1110
 }
 
 /// On-device speech-to-text via Apple's Speech framework — the default STT
@@ -80,7 +92,11 @@ public actor AppleSpeechTranscriber: Transcribing {
                             .trimmingCharacters(in: .whitespacesAndNewlines))
                     }
                 } else if let error {
-                    if once.claim() { cont.resume(throwing: error) }
+                    if once.claim() {
+                        cont.resume(throwing: isNoSpeechDetected(error)
+                            ? AppleSpeechError.noSpeechDetected
+                            : error)
+                    }
                 }
             }
         }
