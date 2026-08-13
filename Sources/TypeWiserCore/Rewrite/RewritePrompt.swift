@@ -57,15 +57,26 @@ public enum RewritePrompt {
             spoke, using whichever of these the transcript gives evidence for:
             - A bullet list, marked with "- ", when they enumerate parallel items \
             ("first... second...", "we need X, Y and Z").
-            - A numbered list when they say ordinals implying sequence ("step one... step two").
             - An email shape when they dictate one: a "Subject:" line, the greeting on its \
             own line, the body, and the sign-off on its own line.
             - A blank line between genuine topic shifts.
 
+            When the speaker counts items off — "first", "second", "and third", or simply \
+            lists things one after another — that IS a list. Break it out. Leaving it as one \
+            running paragraph loses the structure they spoke.
+
+            Worked example.
+            Transcript: "there are two things left first the copy is not final second we \
+            have no emails written"
+            Output:
+            There are two things left:
+
+            - The copy is not final
+            - We have no emails written
+
             Formatting rearranges words and breaks lines; it never invents words. Every word \
-            in a greeting or sign-off must be a word the speaker actually said. If the \
-            transcript gives no evidence of structure, output clean prose instead — plain \
-            paragraphs are the correct answer for most dictations.
+            in a greeting or sign-off must be a word the speaker actually said. A transcript \
+            with no list and no email in it stays as prose.
             """
         }
 
