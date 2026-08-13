@@ -94,3 +94,20 @@ private func freshDefaults() -> UserDefaults {
     #expect(SettingsStore(defaults: d).openAIModel == "gpt-5")
     #expect(SettingsStore(defaults: d).anthropicModel == "claude-opus-4-8")
 }
+
+@Test func optionsStoredBeforeAutoFormatExistedKeepTheirValues() throws {
+    // Synthesized Codable throws keyNotFound for a missing key rather than using the
+    // property default, and `options` swallows that with `try?` — so without a
+    // hand-written decoder, adding a field silently resets every existing user's toggles.
+    let legacy = """
+    {"removeFillers":false,"fixGrammar":false,"removeRepetition":false,\
+    "resolveSelfCorrections":false,"contextAwareSpelling":false}
+    """
+    let d = freshDefaults()
+    d.set(Data(legacy.utf8), forKey: "typewiser.options")
+
+    let o = SettingsStore(defaults: d).options
+    #expect(o.removeFillers == false, "the user's saved toggles must survive the upgrade")
+    #expect(o.contextAwareSpelling == false)
+    #expect(o.autoFormat == true, "the new field takes its default")
+}

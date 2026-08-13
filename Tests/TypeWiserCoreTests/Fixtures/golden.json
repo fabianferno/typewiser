@@ -72,5 +72,40 @@
       "write the word"
     ],
     "mustNotContain": []
+  },
+  {
+    "name": "format_bullets_from_enumeration",
+    "input": "okay so for the launch there are three things we still need to sort out first the pricing page copy is not finalised second we have no onboarding emails written at all and third the analytics dashboard is still pointing at the staging database which we need to fix before friday",
+    "mustContain": [
+      "- "
+    ],
+    "mustNotContain": [
+      "first the",
+      "second we"
+    ]
+  },
+  {
+    "name": "format_email_structure",
+    "input": "subject quarterly update hi sarah quick note the numbers are in for this quarter revenue is up twelve percent churn is down we hired two people on the support side and we closed the enterprise deal we talked about last month thanks fabian",
+    "mustContain": [
+      "Subject:",
+      "Hi Sarah"
+    ],
+    "mustNotContain": [
+      "Best regards",
+      "Kind regards",
+      "Sincerely"
+    ]
+  },
+  {
+    "name": "format_prose_stays_prose",
+    "input": "i was thinking about the conversation we had yesterday and honestly the more i sit with it the more i think we were solving the wrong problem the users are not confused by the interface they are confused by what the product is for which is a positioning issue not a design issue",
+    "mustContain": [
+      "positioning"
+    ],
+    "mustNotContain": [
+      "- ",
+      "Subject:"
+    ]
   }
 ]

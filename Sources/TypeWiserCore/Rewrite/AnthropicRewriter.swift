@@ -38,7 +38,7 @@ public struct AnthropicRewriter: Rewriter {
         let body = try JSONSerialization.data(withJSONObject: [
             "model": model,
             "max_tokens": 1024,
-            "system": RewritePrompt.system(options: options, context: context),
+            "system": RewritePrompt.system(options: options, context: context, transcript: transcript),
             "messages": [["role": "user", "content": RewritePrompt.user(transcript)]],
         ])
 

@@ -4,13 +4,13 @@ import Testing
 @Test func systemPromptOnlyListsEnabledRules() {
     var o = RewriteOptions.default
     o.resolveSelfCorrections = false
-    let p = RewritePrompt.system(options: o, context: .empty)
+    let p = RewritePrompt.system(options: o, context: .empty, transcript: "")
     #expect(p.contains("filler"))
     #expect(!p.lowercased().contains("changes their mind"))
 }
 
 @Test func systemPromptForbidsAnsweringTheContent() {
-    let p = RewritePrompt.system(options: .default, context: .empty)
+    let p = RewritePrompt.system(options: .default, context: .empty, transcript: "")
     #expect(p.contains("Never answer"))
     #expect(p.contains("Return only"))
 }
@@ -18,9 +18,9 @@ import Testing
 @Test func contextIsIncludedOnlyWhenSpellingEnabled() {
     let ctx = RewriteContext(surroundingText: "Dear Fabian", appName: "Mail", nameDictionary: ["Crevn"])
     var on = RewriteOptions.default; on.contextAwareSpelling = true
-    #expect(RewritePrompt.system(options: on, context: ctx).contains("Crevn"))
+    #expect(RewritePrompt.system(options: on, context: ctx, transcript: "").contains("Crevn"))
     var off = RewriteOptions.default; off.contextAwareSpelling = false
-    #expect(!RewritePrompt.system(options: off, context: ctx).contains("Crevn"))
+    #expect(!RewritePrompt.system(options: off, context: ctx, transcript: "").contains("Crevn"))
 }
 
 @Test func isNoOpWhenEverythingDisabled() {
@@ -159,4 +159,68 @@ import Testing
         fallback: "he dont know nothing about the deploy"
     )
     #expect(out == "He doesn't know anything about the deploy.")
+}
+
+// MARK: - Automatic formatting of long dictations
+
+/// 40+ words: long enough that the speaker is composing, not typing a phrase.
+private let longTranscript = String(repeating: "word ", count: 45)
+
+@Test func formattingRulesAppearForLongTranscriptsWhenEnabled() {
+    var o = RewriteOptions.default; o.autoFormat = true
+    let p = RewritePrompt.system(options: o, context: .empty, transcript: longTranscript)
+    #expect(p.contains("Subject:"))
+    #expect(p.contains("bullet"))
+}
+
+@Test func formattingRulesAreAbsentForShortTranscripts() {
+    var o = RewriteOptions.default; o.autoFormat = true
+    let p = RewritePrompt.system(options: o, context: .empty, transcript: "meet me at three tomorrow")
+    #expect(!p.contains("Subject:"),
+            "a short dictation goes into a search box or chat composer; line breaks there are a regression")
+}
+
+@Test func formattingRulesAreAbsentWhenAutoFormatIsOff() {
+    var o = RewriteOptions.default; o.autoFormat = false
+    let p = RewritePrompt.system(options: o, context: .empty, transcript: longTranscript)
+    #expect(!p.contains("Subject:"))
+}
+
+@Test func formattingNeverInventsGreetingsOrSignOffs() {
+    var o = RewriteOptions.default; o.autoFormat = true
+    let p = RewritePrompt.system(options: o, context: .empty, transcript: longTranscript)
+    #expect(p.contains("never invents words"))
+    #expect(p.contains("Never invent a greeting or sign-off"))
+    #expect(!p.contains("Never add information, opinions, greetings or sign-offs"),
+            "the old wording forbids the email case outright and must be gone")
+}
+
+@Test func autoFormatAloneIsStillANoOp() {
+    var o = RewriteOptions.default
+    o.removeFillers = false; o.fixGrammar = false; o.removeRepetition = false
+    o.resolveSelfCorrections = false; o.contextAwareSpelling = false
+    o.autoFormat = true
+    #expect(o.isNoOp, "formatting alone does not justify a model round-trip")
+}
+
+@Test func sanitizeKeepsSubjectLine() {
+    let formatted = "Subject: Quarterly update\n\nHi Sarah,\n\nThe numbers are in."
+    #expect(RewritePrompt.sanitize(formatted, fallback: "subject quarterly update hi sarah the numbers are in")
+            == formatted,
+            "the preamble stripper must not eat an email subject line")
+}
+
+@Test func sanitizeKeepsBulletMarkersAndBlankLines() {
+    let formatted = "The numbers are in:\n\n- Revenue is up\n- Churn is down"
+    #expect(RewritePrompt.sanitize(formatted, fallback: "the numbers are in revenue is up churn is down")
+            == formatted)
+}
+
+@Test func formattedEmailSurvivesThePlausibilityGuard() {
+    let spoken = "subject quarterly update hi sarah quick note the numbers are in "
+        + "revenue is up twelve percent churn is down we hired two people thanks fabian"
+    let formatted = "Subject: Quarterly update\n\nHi Sarah,\n\nQuick note - the numbers are in:\n\n"
+        + "- Revenue is up 12%\n- Churn is down\n- We hired two people\n\nThanks,\nFabian"
+    #expect(RewritePrompt.sanitize(formatted, fallback: spoken) == formatted,
+            "structure adds no ungrounded tokens, so the grounding guard must not reject it")
 }

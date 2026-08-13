@@ -45,7 +45,7 @@ public struct BedrockRewriter: Rewriter {
         let url = URL(string: "https://bedrock-runtime.\(credentials.region).amazonaws.com/model/\(encodedModel)/invoke")!
 
         let body = try JSONSerialization.data(withJSONObject: [
-            "system": [["text": RewritePrompt.system(options: options, context: context)]],
+            "system": [["text": RewritePrompt.system(options: options, context: context, transcript: transcript)]],
             "messages": [["role": "user", "content": [["text": RewritePrompt.user(transcript)]]]],
             "inferenceConfig": ["maxTokens": 512, "temperature": 0],
         ])

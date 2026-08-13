@@ -102,6 +102,9 @@ struct SettingsView: View {
             Text("\"Let's meet at 2… actually 3\" becomes \"Let's meet at 3.\"")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("Use surrounding text to spell names", isOn: $options.contextAwareSpelling)
+            Toggle("Format long dictations", isOn: $options.autoFormat)
+            Text("Restores lists and email structure in longer dictations, using only words you said.")
+                .font(.caption).foregroundStyle(.secondary)
 
             Section("Name dictionary") {
                 TextField("Comma-separated", text: $names, axis: .vertical)

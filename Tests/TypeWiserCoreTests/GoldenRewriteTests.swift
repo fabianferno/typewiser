@@ -74,6 +74,6 @@ func goldenBedrock() async throws {
     let ctx = RewriteContext(surroundingText: nil, appName: nil, nameDictionary: ["Crevn", "Fabian Ferno"])
     var o = RewriteOptions.default
     o.contextAwareSpelling = true
-    let p = RewritePrompt.system(options: o, context: ctx)
+    let p = RewritePrompt.system(options: o, context: ctx, transcript: "")
     #expect(p.contains("Crevn") && p.contains("Fabian Ferno"))
 }

@@ -32,7 +32,7 @@ public struct OpenAIRewriter: Rewriter {
         let body = try JSONSerialization.data(withJSONObject: [
             "model": model,
             "messages": [
-                ["role": "system", "content": RewritePrompt.system(options: options, context: context)],
+                ["role": "system", "content": RewritePrompt.system(options: options, context: context, transcript: transcript)],
                 ["role": "user", "content": RewritePrompt.user(transcript)],
             ],
             "temperature": 0,

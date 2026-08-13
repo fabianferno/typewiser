@@ -27,7 +27,7 @@ public struct LocalLlamaRewriter: Rewriter {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: [
             "messages": [
-                ["role": "system", "content": RewritePrompt.system(options: options, context: context)],
+                ["role": "system", "content": RewritePrompt.system(options: options, context: context, transcript: transcript)],
                 ["role": "user", "content": RewritePrompt.user(transcript)],
             ],
             "temperature": 0,
