@@ -3,6 +3,7 @@ import TypeWiserCore
 
 struct MenuBarView: View {
     @Bindable var model: AppModel
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -40,11 +41,34 @@ struct MenuBarView: View {
                 }
                 Divider()
             }
-            SettingsLink { Text("Settings…") }
+            // Not `SettingsLink`: TypeWiser is an `LSUIElement` agent, so it
+            // is never the active app when the menu is clicked and the
+            // settings window opens behind whatever the user was using.
+            // Activating first, then ordering the window front once SwiftUI
+            // has created it, puts it where any other window would go.
+            Button("Settings…") { openSettingsWindowInFront() }
             Button("Quit") { NSApplication.shared.terminate(nil) }
         }
         .padding(12)
         .frame(width: 240)
+    }
+
+    private func openSettingsWindowInFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
+        // The window doesn't exist yet on this pass of the run loop, so it
+        // can only be raised on the next one.
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            settingsWindow()?.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    /// SwiftUI names the `Settings` scene's window with this identifier; there
+    /// is no public API to reach it.
+    private func settingsWindow() -> NSWindow? {
+        NSApp.windows.first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" }
+            ?? NSApp.windows.first { $0.canBecomeKey && $0.isVisible && !($0 is NSPanel) }
     }
 
     private var statusText: String {
