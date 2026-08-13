@@ -53,8 +53,9 @@ struct SettingsView: View {
     }
 
     /// Speech-to-text source and the local llama-server paths for Cleanup's
-    /// Local mode. All of these are read once at launch, so the footnote tells
-    /// the user a change needs a restart rather than silently doing nothing.
+    /// Local mode. The two differ in when they land — STT is re-read at the top
+    /// of every dictation, the engine paths are injected once at launch — so
+    /// each section carries its own footnote rather than one shared warning.
     /// Its own property because inlining the ForEach pushed the Form body past
     /// what the type-checker will solve in reasonable time.
     private var accentPicker: some View {
@@ -85,6 +86,8 @@ struct SettingsView: View {
                     Text("A whisper.cpp server's /inference endpoint. Audio is uploaded to it.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                Text("Applies to your next dictation — no restart needed.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
 
             Section("Local rewrite engine (llama-server)") {
@@ -99,13 +102,15 @@ struct SettingsView: View {
                 LabeledContent("Draft model") {
                     TextField("draft .gguf path (optional)", text: $draftModelPath).lineLimit(1)
                 }
+                Text("These take effect after you restart TypeWiser.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
-
-            Text("Changes take effect after you restart TypeWiser.")
-                .font(.caption).foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
-        .onChange(of: sttSource) { _, new in model.settings.sttSource = new }
+        .onChange(of: sttSource) { _, new in
+            model.settings.sttSource = new
+            model.sttSourceChanged()
+        }
         .onChange(of: sttLocale) { _, new in model.settings.sttLocale = new }
         .onChange(of: whisperEndpoint) { _, new in model.settings.whisperEndpoint = new }
         .onChange(of: llamaBinaryPath) { _, new in model.settings.llamaBinaryPath = new }

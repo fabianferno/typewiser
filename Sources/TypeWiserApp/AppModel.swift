@@ -44,7 +44,7 @@ final class AppModel {
     private let anthropicKey = KeychainAPIKeyStore(provider: .anthropic)
     private let engine: EngineManager
     private let audio = AudioCapture()
-    private let transcriber: Transcribing
+    private let transcribers: TranscriberProvider
     private var session: DictationSession!
     private var monitor: HotkeyMonitor!
     private let hud: HUDController
@@ -60,11 +60,13 @@ final class AppModel {
 
         // Engine (llama-server) paths and the transcriber are both built from
         // saved settings so a fresh clone can retarget them without a rebuild.
-        // Changing either takes effect on the next launch — they are injected
-        // into `EngineManager`/`DictationSession` once, here.
+        // The engine config is injected into `EngineManager` once, here, and so
+        // still takes a relaunch to change; the transcriber does not — the
+        // provider is re-asked at the top of every dictation. See
+        // `TranscriberProvider`.
         let engineConfig = settings.engineConfig
         self.engine = EngineManager(config: engineConfig)
-        self.transcriber = Self.makeTranscriber(settings: settings)
+        self.transcribers = TranscriberProvider(settings: settings)
 
         // On-device recognition still needs the user's Speech grant; ask at
         // launch (a no-op once already decided) so the first dictation isn't
@@ -110,7 +112,7 @@ final class AppModel {
 
         session = DictationSession(
             audio: audio,
-            whisper: transcriber,
+            whisper: { [transcribers] in transcribers.current() },
             rewriter: {
                 switch settings.mode {
                 case .local:
@@ -254,28 +256,14 @@ final class AppModel {
         }
     }
 
-    /// Chooses the speech-to-text backend from settings. Apple on-device is the
-    /// default and the fallback: if Remote is selected but no endpoint is
-    /// configured yet, dictation still works locally rather than failing.
-    /// The name dictionary feeds both stages: `contextualStrings` here, so the
-    /// recognizer is biased toward hearing the word at all, and the rewrite
-    /// prompt later, so it is spelled the user's way once heard.
-    private static func makeAppleTranscriber(settings: SettingsStore) -> AppleSpeechTranscriber {
-        AppleSpeechTranscriber(locale: Locale(identifier: settings.sttLocale),
-                               vocabulary: settings.nameDictionary)
-    }
-
-    private static func makeTranscriber(settings: SettingsStore) -> Transcribing {
-        switch settings.sttSource {
-        case .apple:
-            return makeAppleTranscriber(settings: settings)
-        case .remote:
-            let raw = settings.whisperEndpoint.trimmingCharacters(in: .whitespaces)
-            if !raw.isEmpty, let url = URL(string: raw) {
-                return WhisperClient(endpoint: url)
-            }
-            return makeAppleTranscriber(settings: settings)
-        }
+    /// Called when Settings switches the speech-to-text source. The switch
+    /// itself needs no work — the next dictation picks it up on its own — but
+    /// selecting Apple for the first time must still get the user's Speech
+    /// grant, and asking here means the prompt lands while they are looking at
+    /// the setting rather than mid-dictation. A no-op once already decided.
+    func sttSourceChanged() {
+        guard settings.sttSource == .apple else { return }
+        Task { _ = await AppleSpeechTranscriber.requestAuthorization() }
     }
 
     /// Local spawns llama-server; Cloud kills it to reclaim ~17GB of RAM and the GPU.

@@ -38,7 +38,11 @@ final class FakeWhisper: Transcribing, @unchecked Sendable {
     /// has already moved past it.
     var interimDelay: Duration = .zero
     var cancelCount = 0
+    /// How many final transcriptions this instance served — the only way to
+    /// tell WHICH transcriber a cycle actually used when several are in play.
+    var transcribeCount = 0
     func transcribe(pcm16: [Int16]) async throws -> String {
+        transcribeCount += 1
         if let e = finalError { throw e }
         return finalText
     }
@@ -138,7 +142,7 @@ private func makeSession(audio: FakeAudio = FakeAudio(),
     keys.pb = pb
     return DictationSession(
         audio: audio,
-        whisper: whisper,
+        whisper: { whisper },
         rewriter: { rewriter },
         context: { FakeContext() },
         injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil),
@@ -385,6 +389,54 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
 // blocking AX call kept off the post-release critical path (see
 // `DictationSession.capturedContext`). Per-cycle freshness is unaffected:
 // a name added in Settings still takes effect on the very next dictation.
+/// The speech-to-text source used to be resolved once, in `AppModel.init`, so
+/// switching between Apple and remote whisper.cpp in Settings did nothing until
+/// the app was relaunched. The session must ask its factory again on every
+/// `begin()` — and must keep using that one instance for the whole cycle, so a
+/// switch made mid-hold can't split an utterance across two transcribers.
+@Test func whisperFactoryIsInvokedFreshEachCycleAndHeldForTheWholeCycle() async {
+    let first = FakeWhisper(), second = FakeWhisper()
+    first.finalText = "from the first transcriber"
+    second.finalText = "from the second transcriber"
+
+    let vended = VendingWhisperFactory([first, second])
+    let rewriter = RecordingRewriter()
+    let s = DictationSession(
+        audio: FakeAudio(),
+        whisper: { vended.next() },
+        rewriter: { rewriter },
+        context: { FakeContext() },
+        injector: TextInjector(pasteboard: FakePasteboard(), keys: FakeKeys(), restoreDelay: .milliseconds(1), sound: nil),
+        options: { .default }
+    )
+
+    await s.begin()
+    #expect(vended.callCount == 1, "the factory must be consulted at begin(), not only at init")
+    await s.end()
+    #expect(first.transcribeCount == 1, "the cycle must transcribe with the instance it resolved at begin()")
+    #expect(second.transcribeCount == 0)
+
+    // Mimics the user changing the source in Settings between dictations.
+    await s.begin()
+    await s.end()
+    #expect(vended.callCount == 2)
+    #expect(second.transcribeCount == 1, "the second cycle must use the NEW source, not one frozen at construction")
+    #expect(first.transcribeCount == 1)
+}
+
+/// Hands out each element in turn, then repeats the last one. Counts calls so
+/// the test above can assert on *when* the factory was consulted, not just
+/// which transcriber ran.
+private final class VendingWhisperFactory: @unchecked Sendable {
+    private var queue: [FakeWhisper]
+    private(set) var callCount = 0
+    init(_ queue: [FakeWhisper]) { self.queue = queue }
+    func next() -> FakeWhisper {
+        callCount += 1
+        return queue.count > 1 ? queue.removeFirst() : queue[0]
+    }
+}
+
 @Test func contextFactoryIsInvokedFreshEachCycle() async {
     let factory = FakeContextFactory()
     factory.current = RewriteContext(nameDictionary: ["Ada"])
@@ -392,7 +444,7 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
     let pb = FakePasteboard(), keys = FakeKeys()
     let s = DictationSession(
         audio: FakeAudio(),
-        whisper: FakeWhisper(),
+        whisper: { FakeWhisper() },
         rewriter: { rewriter },
         context: { factory.make() },
         injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil),
@@ -429,7 +481,7 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
     let rewriter = RecordingRewriter()
     let s = DictationSession(
         audio: FakeAudio(),
-        whisper: FakeWhisper(),
+        whisper: { FakeWhisper() },
         rewriter: { rewriter },
         context: { factory.make() },
         injector: TextInjector(pasteboard: FakePasteboard(), keys: FakeKeys(), restoreDelay: .milliseconds(1), sound: nil),

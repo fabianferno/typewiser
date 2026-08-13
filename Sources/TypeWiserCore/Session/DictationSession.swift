@@ -14,7 +14,17 @@ public enum SessionPhase: Sendable, Equatable {
 /// `HotkeyStateMachine` and the HUD label.
 public actor DictationSession {
     private let audio: AudioCapturing
-    private let whisper: Transcribing
+    /// Resolved once per dictation, at `begin()` — the same instance then
+    /// serves the interim loop, `end()` and `cancel()` for that whole cycle,
+    /// so a source switch mid-hold can never split one utterance across two
+    /// transcribers. Re-resolving each cycle is what makes the Settings
+    /// picker take effect on the very next dictation instead of at relaunch.
+    ///
+    /// Nil until the first `begin()`: building one at `init` would construct an
+    /// `SFSpeechRecognizer` the app may never use, and would be built from
+    /// settings as they stood at launch — the very thing this replaced.
+    private let makeWhisper: @Sendable () -> Transcribing
+    private var whisper: Transcribing?
     private let makeRewriter: @Sendable () -> Rewriter
     private let makeContext: @Sendable () -> ContextReading
     private let injector: TextInjector
@@ -65,7 +75,7 @@ public actor DictationSession {
     private var capturedContext: RewriteContext = .empty
 
     public init(audio: AudioCapturing,
-                whisper: Transcribing,
+                whisper: @escaping @Sendable () -> Transcribing,
                 rewriter: @escaping @Sendable () -> Rewriter,
                 context: @escaping @Sendable () -> ContextReading,
                 injector: TextInjector,
@@ -73,7 +83,7 @@ public actor DictationSession {
                 tooShortSound: SoundPlaying? = SystemSoundPlayer(.tooShort)) {
         self.tooShortSound = tooShortSound
         self.audio = audio
-        self.whisper = whisper
+        self.makeWhisper = whisper
         self.makeRewriter = rewriter
         self.makeContext = context
         self.injector = injector
@@ -88,6 +98,10 @@ public actor DictationSession {
     public func begin() async {
         isEnding = false
         capturedContext = .empty
+        // Before `audio.start()`: picking up the current source can never be
+        // late for this dictation, and the old instance is finished with —
+        // both `end()` and `cancel()` cancel in flight before returning.
+        whisper = makeWhisper()
         do {
             try await audio.start()
         } catch {
@@ -116,7 +130,8 @@ public actor DictationSession {
                     try? await Task.sleep(for: .milliseconds(200))
                     continue
                 }
-                if let text = try? await self.whisper.tryTranscribe(pcm16: samples) {
+                guard let whisper = await self.whisper else { return }
+                if let text = try? await whisper.tryTranscribe(pcm16: samples) {
                     await self.emitInterim(text)
                 } else {
                     try? await Task.sleep(for: .milliseconds(200))
@@ -135,7 +150,7 @@ public actor DictationSession {
         interimTask?.cancel()
         interimTask = nil
         await audio.stop()
-        await whisper.cancelInFlight()
+        await whisper?.cancelInFlight()
         emit(.idle)
     }
 
@@ -144,7 +159,7 @@ public actor DictationSession {
         interimTask?.cancel()
         interimTask = nil
         await audio.stop()
-        await whisper.cancelInFlight()
+        await whisper?.cancelInFlight()
 
         let samples = await audio.currentSamples()
         // Loudness, not content: RMS and peak are the only way to tell a
@@ -171,7 +186,10 @@ public actor DictationSession {
 
         let transcript: String
         do {
-            transcript = try await whisper.transcribe(pcm16: samples)
+            // `?? makeWhisper()` only for an `end()` with no preceding
+            // `begin()` — unreachable through the hotkey, but transcribing is
+            // still the right answer there rather than dropping the audio.
+            transcript = try await (whisper ?? makeWhisper()).transcribe(pcm16: samples)
         } catch {
             let input = AudioDevice.currentInput()
             TWLog.stt.error(
