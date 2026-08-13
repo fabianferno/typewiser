@@ -9,7 +9,9 @@ public enum SessionPhase: Sendable, Equatable {
     case error(String)
 }
 
-/// Orchestrates one hold-to-talk cycle.
+/// Orchestrates one dictation cycle. Identical whether the recording was held
+/// or latched hands-free — that distinction lives entirely in
+/// `HotkeyStateMachine` and the HUD label.
 public actor DictationSession {
     private let audio: AudioCapturing
     private let whisper: Transcribing
@@ -165,6 +167,11 @@ public actor DictationSession {
             return
         }
 
+        // Counts, not content: without a length either side of cleanup there is
+        // no way to tell a transcriber that dropped words from a rewriter that
+        // summarised them — the inserted length alone looks identical.
+        TWLog.stt.info("transcript: \(trimmed.count) chars")
+
         emit(.rewriting)
         // Any rewriter failure degrades to the raw transcript. Losing the user's
         // words is never an acceptable outcome — but the failure itself must be
@@ -178,7 +185,7 @@ public actor DictationSession {
         }
 
         await injector.insert(final)
-        TWLog.session.info("inserted \(final.count) chars")
+        TWLog.session.info("inserted \(final.count) chars (from \(trimmed.count) transcribed)")
         emit(.inserted(final))
     }
 }
