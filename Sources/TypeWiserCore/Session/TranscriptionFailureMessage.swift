@@ -25,10 +25,19 @@ public enum TranscriptionFailureMessage {
         return "Didn't catch any speech from “\(input.name)”. Check that it's picking up your voice."
     }
 
+    /// "en_GB" -> "English (United Kingdom)". Falls back to the raw identifier
+    /// rather than dropping the locale, which is the one detail that makes the
+    /// message actionable.
+    private static func displayName(_ locale: String) -> String {
+        Locale.current.localizedString(forIdentifier: locale) ?? locale
+    }
+
     private static func generic(_ error: Error) -> String {
         switch error {
         case AppleSpeechError.notAuthorized:
             return "Speech Recognition permission is off — enable it in System Settings → Privacy & Security."
+        case AppleSpeechError.modelNotInstalled(let locale):
+            return "The \(displayName(locale)) speech model isn't installed on this Mac. Pick a different accent in Settings, or add the language in System Settings → Keyboard → Dictation."
         case AppleSpeechError.unavailable:
             return "Speech recognition is unavailable — the on-device model may still be downloading."
         case AppleSpeechError.cancelled, WhisperError.cancelled:

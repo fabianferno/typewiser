@@ -66,8 +66,14 @@ struct SettingsView: View {
         }
     }
 
+    /// Marks accents macOS has no on-device model for, so the choice is made
+    /// before a failed dictation rather than after one. `hasOnDeviceModel` only
+    /// catches the locales macOS admits to — one that claims support can still
+    /// fail at recognition time, which is what the HUD's "speech model isn't
+    /// installed" message is for. Both are needed; neither is sufficient.
     private func localeLabel(_ id: String) -> String {
-        Locale.current.localizedString(forIdentifier: id) ?? id
+        let name = Locale.current.localizedString(forIdentifier: id) ?? id
+        return AppleSpeechTranscriber.hasOnDeviceModel(locale: id) ? name : "\(name) — not installed"
     }
 
     private var engineTab: some View {
@@ -79,6 +85,10 @@ struct SettingsView: View {
                 }
                 if sttSource == .apple {
                     accentPicker
+                    if !AppleSpeechTranscriber.hasOnDeviceModel(locale: sttLocale) {
+                        Text("This accent has no speech model on this Mac and will fail. Add the language in System Settings → Keyboard → Dictation, or pick another.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                     Text("Runs on-device with no setup. Audio never leaves your Mac. Pick the English closest to how you speak — a mismatch mishears words.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {

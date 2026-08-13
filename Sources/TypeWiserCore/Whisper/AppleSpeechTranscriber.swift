@@ -8,6 +8,16 @@ public enum AppleSpeechError: Error, Equatable {
     case unavailable
     case notAuthorized
     case cancelled
+    /// macOS has no on-device speech model installed for this locale. Carries
+    /// the locale identifier because the fix is specific to it — install that
+    /// language, or pick an accent whose model is present — and the raw
+    /// `NSError` this replaces named it only inside an unreadable nested
+    /// `UserInfo` dump.
+    ///
+    /// Not detectable up front: `supportsOnDeviceRecognition` returns true for
+    /// locales whose asset is missing (measured on en_GB), so this only ever
+    /// surfaces as a failure part-way through recognition.
+    case modelNotInstalled(locale: String)
     /// The recognizer read the audio and found nothing it could treat as
     /// speech. Distinguished from a generic failure because it is almost
     /// always a microphone problem rather than a software one, and so earns a
@@ -20,6 +30,16 @@ public enum AppleSpeechError: Error, Equatable {
 private func isNoSpeechDetected(_ error: Error) -> Bool {
     let ns = error as NSError
     return ns.domain == "kAFAssistantErrorDomain" && ns.code == 1110
+}
+
+/// `kLSRErrorDomain` 102 ("Failed to access assets"), whose underlying 101 is
+/// "No Assistant asset for language <tag>". Raised when the locale has no
+/// on-device model installed — the user has never added that language under
+/// System Settings → Keyboard → Dictation. Like 1110 above, Apple exposes no
+/// symbolic constant, and it arrives as a plain `NSError`.
+private func isMissingModel(_ error: Error) -> Bool {
+    let ns = error as NSError
+    return ns.domain == "kLSRErrorDomain" && (ns.code == 102 || ns.code == 101)
 }
 
 /// On-device speech-to-text via Apple's Speech framework — the default STT
@@ -66,6 +86,19 @@ public actor AppleSpeechTranscriber: Transcribing {
         SFSpeechRecognizer.authorizationStatus() == .authorized
     }
 
+    /// Whether macOS reports an on-device model for this locale, used to warn
+    /// in Settings before the user commits to an accent.
+    ///
+    /// A `false` here is reliable — those locales definitely fail. A `true` is
+    /// NOT a guarantee: measured on macOS 15, `en_GB` reports `true` with no
+    /// asset installed and fails at recognition time with `kLSRErrorDomain`
+    /// 101. So this narrows the picker's bad choices without being able to
+    /// eliminate them, and `AppleSpeechError.modelNotInstalled` still has to
+    /// catch the rest.
+    public static func hasOnDeviceModel(locale: String) -> Bool {
+        SFSpeechRecognizer(locale: Locale(identifier: locale))?.supportsOnDeviceRecognition ?? false
+    }
+
     /// Set by `cancelInFlight()` so a multi-segment recognition stops between
     /// segments instead of transcribing the rest of a recording the user has
     /// already abandoned.
@@ -89,6 +122,16 @@ public actor AppleSpeechTranscriber: Transcribing {
     private static let sampleRate = 16_000
     /// Delay between appended buffers — see `recognizeSegment`.
     private static let appendPacing = Duration.milliseconds(20)
+
+    /// Maps the recognizer's untyped `NSError`s onto the cases the HUD knows
+    /// how to phrase. Anything unrecognised passes through untouched rather
+    /// than being flattened into a generic failure — see
+    /// `TranscriptionFailureMessage`.
+    static func classify(_ error: Error, locale: String) -> Error {
+        if isNoSpeechDetected(error) { return AppleSpeechError.noSpeechDetected }
+        if isMissingModel(error) { return AppleSpeechError.modelNotInstalled(locale: locale) }
+        return error
+    }
 
     private func recognize(_ pcm16: [Int16]) async throws -> String {
         guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
@@ -145,6 +188,9 @@ public actor AppleSpeechTranscriber: Transcribing {
 
         let once = ResumeGuard()
         let heard = TranscriptBox()
+        // Captured by value: the completion handler runs off the actor, and
+        // this is the locale the failure should be attributed to regardless.
+        let locale = localeIdentifier
 
         // The `recognitionTask` call runs synchronously in the actor's
         // isolation, so storing the task in `active` needs no hop. The
@@ -170,9 +216,7 @@ public actor AppleSpeechTranscriber: Transcribing {
                     if !partial.isEmpty {
                         cont.resume(returning: partial)
                     } else {
-                        cont.resume(throwing: isNoSpeechDetected(error)
-                            ? AppleSpeechError.noSpeechDetected
-                            : error)
+                        cont.resume(throwing: Self.classify(error, locale: locale))
                     }
                 }
             }

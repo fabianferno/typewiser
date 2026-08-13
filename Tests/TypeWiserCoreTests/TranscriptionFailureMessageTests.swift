@@ -45,6 +45,27 @@ import Testing
         #expect(!unavailable.contains("AirPods"))
     }
 
+    /// The failure the HUD used to render as a raw nested `NSError` dump
+    /// ("Error Domain=kLSRErrorDomain Code=102 … UserInfo={…"). It must name
+    /// the accent in words and point at the two things that actually fix it.
+    @Test func missingModelNamesTheAccentAndBothFixes() {
+        let text = TranscriptionFailureMessage.text(for: AppleSpeechError.modelNotInstalled(locale: "en_GB"),
+                                                    input: airpods)
+        #expect(text.contains("United Kingdom"), "the user cannot act on a raw locale identifier")
+        #expect(text.contains("Dictation"), "should point at where the language is installed")
+        #expect(text.lowercased().contains("accent"), "switching accent is the faster fix, and must be offered")
+        #expect(!text.contains("AirPods"), "a missing model is not a microphone problem")
+        #expect(!text.contains("Domain="), "the raw NSError must not reach the HUD")
+    }
+
+    /// An unrecognised locale identifier must still produce a usable message
+    /// rather than losing the one detail the user needs.
+    @Test func missingModelFallsBackToTheRawLocaleIdentifier() {
+        let text = TranscriptionFailureMessage.text(for: AppleSpeechError.modelNotInstalled(locale: "zz_ZZ"),
+                                                    input: nil)
+        #expect(text.contains("zz_ZZ"))
+    }
+
     @Test func unknownErrorsFallBackToTheirDescription() {
         struct Odd: Error {}
         let text = TranscriptionFailureMessage.text(for: Odd(), input: builtIn)
