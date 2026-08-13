@@ -12,6 +12,7 @@ struct SettingsView: View {
     @State private var secretKey = ""
     @State private var savedMessage = ""
     @State private var sttSource: STTSource = .apple
+    @State private var sttLocale: String = SettingsStore.systemDefaultSTTLocale
     @State private var whisperEndpoint = ""
     @State private var llamaBinaryPath = ""
     @State private var modelPath = ""
@@ -38,6 +39,7 @@ struct SettingsView: View {
             options = model.settings.options
             names = model.settings.nameDictionary.joined(separator: ", ")
             sttSource = model.settings.sttSource
+            sttLocale = model.settings.sttLocale
             whisperEndpoint = model.settings.whisperEndpoint
             llamaBinaryPath = model.settings.llamaBinaryPath
             modelPath = model.settings.modelPath
@@ -51,6 +53,20 @@ struct SettingsView: View {
     /// Speech-to-text source and the local llama-server paths for Cleanup's
     /// Local mode. All of these are read once at launch, so the footnote tells
     /// the user a change needs a restart rather than silently doing nothing.
+    /// Its own property because inlining the ForEach pushed the Form body past
+    /// what the type-checker will solve in reasonable time.
+    private var accentPicker: some View {
+        Picker("Accent", selection: $sttLocale) {
+            ForEach(SettingsStore.supportedSTTLocales, id: \.self) { id in
+                Text(localeLabel(id)).tag(id)
+            }
+        }
+    }
+
+    private func localeLabel(_ id: String) -> String {
+        Locale.current.localizedString(forIdentifier: id) ?? id
+    }
+
     private var engineTab: some View {
         Form {
             Section("Speech-to-text") {
@@ -59,7 +75,8 @@ struct SettingsView: View {
                     Text("Remote whisper.cpp").tag(STTSource.remote)
                 }
                 if sttSource == .apple {
-                    Text("Runs on-device with no setup. Audio never leaves your Mac.")
+                    accentPicker
+                    Text("Runs on-device with no setup. Audio never leaves your Mac. Pick the English closest to how you speak — a mismatch mishears words.")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     TextField("https://host/inference", text: $whisperEndpoint)
@@ -87,6 +104,7 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onChange(of: sttSource) { _, new in model.settings.sttSource = new }
+        .onChange(of: sttLocale) { _, new in model.settings.sttLocale = new }
         .onChange(of: whisperEndpoint) { _, new in model.settings.whisperEndpoint = new }
         .onChange(of: llamaBinaryPath) { _, new in model.settings.llamaBinaryPath = new }
         .onChange(of: modelPath) { _, new in model.settings.modelPath = new }

@@ -33,6 +33,7 @@ public final class SettingsStore: @unchecked Sendable {
         static let modelPath = "typewiser.modelPath"
         static let draftModelPath = "typewiser.draftModelPath"
         static let cloudProvider = "typewiser.cloudProvider"
+        static let sttLocale = "typewiser.sttLocale"
         static let openAIModel = "typewiser.openAIModel"
         static let anthropicModel = "typewiser.anthropicModel"
     }
@@ -65,6 +66,40 @@ public final class SettingsStore: @unchecked Sendable {
     public var nameDictionary: [String] {
         get { defaults.stringArray(forKey: Key.names) ?? [] }
         set { defaults.set(newValue, forKey: Key.names) }
+    }
+
+    /// English locales Apple's Speech framework recognises, offered in Settings.
+    /// Accent match matters more than it looks: an `en_US` acoustic model hearing
+    /// an Indian-English speaker mishears in a characteristic way ("launch" ->
+    /// "lunch", "churn" -> "sure"), which reads as a broken app rather than a
+    /// mismatched model.
+    public static let supportedSTTLocales = [
+        "en_US", "en_IN", "en_GB", "en_AU", "en_CA", "en_IE", "en_NZ", "en_ZA",
+    ]
+
+    /// Which acoustic model transcribes. Defaults to the system locale when the
+    /// framework has a recognizer for it, so a machine set to English (India)
+    /// gets the matching model without the user knowing this setting exists;
+    /// falls back to `en_US` otherwise. A stored value that is no longer
+    /// supported falls back too, rather than handing the transcriber a locale
+    /// with no recognizer behind it.
+    public var sttLocale: String {
+        get {
+            let stored = defaults.string(forKey: Key.sttLocale) ?? ""
+            if Self.supportedSTTLocales.contains(stored) { return stored }
+            return Self.systemDefaultSTTLocale
+        }
+        set { defaults.set(newValue, forKey: Key.sttLocale) }
+    }
+
+    public static var systemDefaultSTTLocale: String {
+        let system = Locale.current.identifier.replacingOccurrences(of: "-", with: "_")
+        if supportedSTTLocales.contains(system) { return system }
+        // Region-qualified identifiers can carry extra subtags (en_IN@calendar=…);
+        // match on the leading language_region pair before giving up.
+        let parts = system.split(separator: "@").first.map(String.init) ?? system
+        if supportedSTTLocales.contains(parts) { return parts }
+        return "en_US"
     }
 
     public var sttSource: STTSource {

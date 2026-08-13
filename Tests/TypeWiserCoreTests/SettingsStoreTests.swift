@@ -111,3 +111,30 @@ private func freshDefaults() -> UserDefaults {
     #expect(o.contextAwareSpelling == false)
     #expect(o.autoFormat == true, "the new field takes its default")
 }
+
+@Test func sttLocaleDefaultsToASupportedSystemLocale() {
+    let s = SettingsStore(defaults: freshDefaults())
+    // A hardcoded en_US mishears an accented speaker in exactly the way an
+    // accent-matched model does not, so the default follows the system rather
+    // than a constant — but only where a recognizer for it actually exists.
+    #expect(!s.sttLocale.isEmpty)
+    #expect(SettingsStore.supportedSTTLocales.contains(s.sttLocale))
+}
+
+@Test func sttLocaleRoundTrips() {
+    let d = freshDefaults()
+    SettingsStore(defaults: d).sttLocale = "en_IN"
+    #expect(SettingsStore(defaults: d).sttLocale == "en_IN")
+}
+
+@Test func supportedSTTLocalesIncludeIndianAndUSEnglish() {
+    #expect(SettingsStore.supportedSTTLocales.contains("en_IN"))
+    #expect(SettingsStore.supportedSTTLocales.contains("en_US"))
+}
+
+@Test func unsupportedStoredLocaleFallsBackRatherThanBreakingDictation() {
+    let d = freshDefaults()
+    d.set("xx_XX", forKey: "typewiser.sttLocale")
+    #expect(SettingsStore.supportedSTTLocales.contains(SettingsStore(defaults: d).sttLocale),
+            "a locale with no recognizer must never reach the transcriber")
+}

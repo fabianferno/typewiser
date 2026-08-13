@@ -256,16 +256,24 @@ final class AppModel {
     /// Chooses the speech-to-text backend from settings. Apple on-device is the
     /// default and the fallback: if Remote is selected but no endpoint is
     /// configured yet, dictation still works locally rather than failing.
+    /// The name dictionary feeds both stages: `contextualStrings` here, so the
+    /// recognizer is biased toward hearing the word at all, and the rewrite
+    /// prompt later, so it is spelled the user's way once heard.
+    private static func makeAppleTranscriber(settings: SettingsStore) -> AppleSpeechTranscriber {
+        AppleSpeechTranscriber(locale: Locale(identifier: settings.sttLocale),
+                               vocabulary: settings.nameDictionary)
+    }
+
     private static func makeTranscriber(settings: SettingsStore) -> Transcribing {
         switch settings.sttSource {
         case .apple:
-            return AppleSpeechTranscriber()
+            return makeAppleTranscriber(settings: settings)
         case .remote:
             let raw = settings.whisperEndpoint.trimmingCharacters(in: .whitespaces)
             if !raw.isEmpty, let url = URL(string: raw) {
                 return WhisperClient(endpoint: url)
             }
-            return AppleSpeechTranscriber()
+            return makeAppleTranscriber(settings: settings)
         }
     }
 

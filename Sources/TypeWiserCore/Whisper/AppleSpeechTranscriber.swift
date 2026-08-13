@@ -37,8 +37,19 @@ public actor AppleSpeechTranscriber: Transcribing {
     /// stop it (recognition is otherwise fire-and-forget once started).
     private var active: SFSpeechRecognitionTask?
 
-    public init(locale: Locale = Locale(identifier: "en_US")) {
+    /// Proper nouns and jargon to bias recognition toward, passed to the request
+    /// as `contextualStrings`. This is the only place a hint can prevent a
+    /// mis-hearing: the rewrite prompt's name dictionary sees the transcript
+    /// after the fact, and cannot recover a word the recognizer never heard.
+    public nonisolated let vocabulary: [String]
+    /// Exposed for tests and logging — `SFSpeechRecognizer` does not report the
+    /// locale it was built with.
+    public nonisolated let localeIdentifier: String
+
+    public init(locale: Locale = Locale(identifier: "en_US"), vocabulary: [String] = []) {
         self.recognizer = SFSpeechRecognizer(locale: locale)
+        self.vocabulary = vocabulary
+        self.localeIdentifier = locale.identifier
     }
 
     /// Prompts for Speech authorization if not yet decided. On-device
@@ -130,6 +141,7 @@ public actor AppleSpeechTranscriber: Transcribing {
         request.requiresOnDeviceRecognition = true
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
+        if !vocabulary.isEmpty { request.contextualStrings = vocabulary }
 
         let once = ResumeGuard()
         let heard = TranscriptBox()
