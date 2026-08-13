@@ -89,9 +89,10 @@ final class HUDController {
         panel?.orderOut(nil)
     }
 
-    func update(_ phase: SessionPhase, note: String? = nil) {
+    func update(_ phase: SessionPhase, note: String? = nil, handsFree: Bool = false) {
         state.phase = phase
         state.note = note
+        state.handsFree = handsFree
 
         if case .recording = phase {
             startLevelPolling()
@@ -130,6 +131,9 @@ final class HUDState {
     /// used to warn that Cloud mode has no credentials, so cleanup silently
     /// isn't running. `nil` renders nothing extra.
     var note: String?
+    /// Whether the current recording was latched by a double-tap. Only read
+    /// during `.recording`, to distinguish a latch from a hold.
+    var handsFree = false
     /// Normalized microphone levels, newest first, capped at the number of
     /// bars the waveform can draw. `WaveformView` puts index 0 on the centre
     /// line, so pushing to the front is what makes new sound bloom outward.

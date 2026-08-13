@@ -132,7 +132,7 @@ struct HUDView: View {
     private var label: String {
         switch state.phase {
         case .idle: return "Idle"
-        case .recording: return "Listening"
+        case .recording: return state.handsFree ? "Listening · hands-free" : "Listening"
         case .transcribing: return "Transcribing"
         case .rewriting: return "Cleaning up"
         case .inserted: return "Inserted"
@@ -146,7 +146,12 @@ struct HUDView: View {
         case .recording(let interim):
             // Interim trails ~3.5s behind speech: the server has one slot and a
             // fixed ~3.5s latency. Say so rather than looking broken.
-            return interim.isEmpty ? "Listening… (text appears after ~3.5s)" : interim
+            guard interim.isEmpty else { return interim }
+            // Hands-free has no self-evident exit — the user isn't holding
+            // anything — so the first thing the card says is how to end it.
+            return state.handsFree
+                ? "Press Fn to stop (text appears after ~3.5s)"
+                : "Listening… (text appears after ~3.5s)"
         case .transcribing: return "Sending to Whisper…"
         case .rewriting: return "Polishing…"
         case .inserted(let t): return t

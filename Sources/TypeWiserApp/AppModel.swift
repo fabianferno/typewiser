@@ -19,6 +19,11 @@ private struct NoCredentialsRewriter: Rewriter {
 @Observable
 final class AppModel {
     var phase: SessionPhase = .idle
+    /// Whether the current recording was latched by a double-tap rather than
+    /// held. Purely presentational — the session behaves identically either
+    /// way — but a latch the user didn't mean to trigger would otherwise
+    /// record indefinitely while looking exactly like a normal hold.
+    var handsFree = false
     var mode: EngineMode {
         didSet {
             settings.mode = mode
@@ -193,7 +198,12 @@ final class AppModel {
 
     private func handle(_ action: HotkeyAction) async {
         switch action {
-        case .start: await session.begin()
+        case .start(let handsFree):
+            // Set before `begin()`, because `begin()` publishes `.recording`
+            // and `observePhases` reads this flag when it forwards that phase
+            // to the HUD.
+            self.handsFree = handsFree
+            await session.begin()
         case .stop: await session.end()
         case .cancel: await session.cancel()
         }
@@ -207,6 +217,9 @@ final class AppModel {
         let stream = await session.phaseStream
         for await p in stream {
             self.phase = p
+            // The gesture only describes a recording. Clear it as soon as one
+            // ends so a later phase can't inherit a stale "hands-free".
+            if case .recording = p {} else { self.handsFree = false }
             // Cloud-with-no-credentials degrades every dictation to the raw
             // transcript with no rewriter error visible anywhere else (see
             // `NoCredentialsRewriter` above) — surface it here so the HUD
@@ -215,7 +228,7 @@ final class AppModel {
             let note: String? = (p != .idle && mode == .cloud && !hasCloudCredentials())
                 ? "Cloud has no credentials — pasting the raw transcript, unedited"
                 : nil
-            hud.update(p, note: note)
+            hud.update(p, note: note, handsFree: handsFree)
 
             // Any new phase invalidates a previously scheduled auto-hide:
             // without this, starting a fresh dictation right after an

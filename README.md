@@ -2,6 +2,10 @@
 
 Hold 🌐, speak, release. Cleaned-up text appears in whatever app has focus.
 
+For longer dictation, **double-tap 🌐** to go hands-free: recording latches on
+so you can let go of the key, and typing won't interrupt it. Press 🌐 once to
+stop.
+
 Speech-to-text runs **on-device** by default via Apple's Speech framework — no
 server, no model download, and audio never leaves your Mac. You can instead point
 it at a self-hosted whisper.cpp server (Settings → Engine). Cleanup — filler
