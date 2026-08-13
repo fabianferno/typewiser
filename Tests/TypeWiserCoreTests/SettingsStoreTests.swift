@@ -30,6 +30,18 @@ private func freshDefaults() -> UserDefaults {
     #expect(SettingsStore(defaults: d).mode == .cloud)
 }
 
+/// Off must survive a relaunch. The trap here is `bool(forKey:)`, which
+/// reports false for "never set" too and would flip a user's explicit off back
+/// to on — hence the `object(forKey:)` read in the store.
+@Test func soundsDefaultOnAndAnExplicitOffPersists() {
+    let d = freshDefaults()
+    #expect(SettingsStore(defaults: d).soundsEnabled)
+    SettingsStore(defaults: d).soundsEnabled = false
+    #expect(SettingsStore(defaults: d).soundsEnabled == false)
+    SettingsStore(defaults: d).soundsEnabled = true
+    #expect(SettingsStore(defaults: d).soundsEnabled)
+}
+
 @Test func nameDictionaryRoundTrips() {
     let d = freshDefaults()
     SettingsStore(defaults: d).nameDictionary = ["Crevn", "Fabian Ferno"]

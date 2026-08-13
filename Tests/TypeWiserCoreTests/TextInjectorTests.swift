@@ -59,19 +59,42 @@ final class FakeKeys: KeystrokeSending, @unchecked Sendable {
     }
 }
 
+final class FakeSound: SoundPlaying, @unchecked Sendable {
+    private(set) var plays = 0
+    func play() { plays += 1 }
+}
+
 @Test func insertSetsPastesAndRestoresInOrder() async {
     let pb = FakePasteboard(), keys = FakeKeys()
     keys.pb = pb
-    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1))
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil)
     await inj.insert("hello")
     #expect(keys.sent == 1)
     #expect(pb.log == ["snapshot", "set:hello", "restore"])
 }
 
+@Test func insertPlaysTheCueOncePerPaste() async {
+    let pb = FakePasteboard(), keys = FakeKeys(), sound = FakeSound()
+    keys.pb = pb
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: sound)
+    await inj.insert("hello")
+    #expect(sound.plays == 1)
+}
+
+/// Nothing was pasted, so nothing should be heard — an empty insert returns
+/// before touching the pasteboard and must stay equally silent.
+@Test func emptyInsertPlaysNoCue() async {
+    let sound = FakeSound()
+    let inj = TextInjector(pasteboard: FakePasteboard(), keys: FakeKeys(),
+                           restoreDelay: .milliseconds(1), sound: sound)
+    await inj.insert("")
+    #expect(sound.plays == 0)
+}
+
 @Test func textIsOnPasteboardAtTheMomentCommandVFires() async {
     let pb = FakePasteboard(), keys = FakeKeys()
     keys.pb = pb
-    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1))
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil)
     await inj.insert("hello")
     #expect(keys.pasteboardAtSendTime == "hello", "must not restore before the paste lands")
 }
@@ -79,7 +102,7 @@ final class FakeKeys: KeystrokeSending, @unchecked Sendable {
 @Test func originalClipboardIsRestoredAfterwards() async {
     let pb = FakePasteboard(), keys = FakeKeys()
     keys.pb = pb
-    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1))
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil)
     await inj.insert("hello")
     #expect(pb.current == "ORIGINAL")
 }
@@ -87,7 +110,7 @@ final class FakeKeys: KeystrokeSending, @unchecked Sendable {
 @Test func emptyTextIsANoOp() async {
     let pb = FakePasteboard(), keys = FakeKeys()
     keys.pb = pb
-    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1))
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil)
     await inj.insert("")
     #expect(keys.sent == 0)
     #expect(pb.log.isEmpty)
@@ -114,7 +137,7 @@ final class FakeKeys: KeystrokeSending, @unchecked Sendable {
     let pb = FakePasteboard(), keys = FakeKeys()
     keys.pb = pb
     keys.pasteLatency = .milliseconds(50)
-    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(200))
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(200), sound: nil)
     await inj.insert("hello")
     await keys.awaitSimulatedPaste()
     // restoreDelay (200ms) comfortably outlasts pasteLatency (50ms), so the
@@ -132,7 +155,7 @@ final class FakeKeys: KeystrokeSending, @unchecked Sendable {
     let pb = FakePasteboard(), keys = FakeKeys()
     keys.pb = pb
     keys.pasteLatency = .milliseconds(50)
-    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .zero)
+    let inj = TextInjector(pasteboard: pb, keys: keys, restoreDelay: .zero, sound: nil)
     await inj.insert("hello")
     await keys.awaitSimulatedPaste()
     // With an insufficient restoreDelay, the clipboard is put back to

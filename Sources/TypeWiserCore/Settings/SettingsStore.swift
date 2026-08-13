@@ -36,6 +36,7 @@ public final class SettingsStore: @unchecked Sendable {
         static let sttLocale = "typewiser.sttLocale"
         static let openAIModel = "typewiser.openAIModel"
         static let anthropicModel = "typewiser.anthropicModel"
+        static let soundsEnabled = "typewiser.soundsEnabled"
     }
 
     public static let defaultOpenAIModel = "gpt-4o-mini"
@@ -56,6 +57,17 @@ public final class SettingsStore: @unchecked Sendable {
             guard let data = try? JSONEncoder().encode(newValue) else { return }
             defaults.set(data, forKey: Key.options)
         }
+    }
+
+    /// The audible cues: Morse when text is pasted, Ping when the hotkey was
+    /// released before anything could be captured. On by default — the HUD is
+    /// often behind the window the user is typing into, so sound is the only
+    /// feedback they reliably get. `object(forKey:)` rather than
+    /// `bool(forKey:)` because the latter can't tell "never set" (which must
+    /// mean on) from an explicit off.
+    public var soundsEnabled: Bool {
+        get { defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.soundsEnabled) }
     }
 
     public var mode: EngineMode {

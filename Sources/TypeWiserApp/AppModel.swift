@@ -138,8 +138,9 @@ final class AppModel {
                 }
             },
             context: { AXContextReader(nameDictionary: settings.nameDictionary) },
-            injector: TextInjector(),
-            options: { settings.options }
+            injector: TextInjector(sound: SystemSoundPlayer(.paste, isEnabled: { settings.soundsEnabled })),
+            options: { settings.options },
+            tooShortSound: SystemSoundPlayer(.tooShort, isEnabled: { settings.soundsEnabled })
         )
 
         monitor = HotkeyMonitor { [weak self] action in

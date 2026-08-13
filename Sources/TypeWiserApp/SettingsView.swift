@@ -7,7 +7,7 @@ import TypeWiserCore
 struct SettingsView: View {
     @Bindable var model: AppModel
     @State private var options = RewriteOptions.default
-    @State private var names = ""
+    @State private var names: [String] = []
     @State private var accessKey = ""
     @State private var secretKey = ""
     @State private var savedMessage = ""
@@ -22,6 +22,7 @@ struct SettingsView: View {
     @State private var anthropicKeyField = ""
     @State private var openAIModel = ""
     @State private var anthropicModel = ""
+    @State private var soundsEnabled = true
 
     private let credentials = KeychainCredentialStore()
     private let openAIStore = KeychainAPIKeyStore(provider: .openai)
@@ -37,7 +38,7 @@ struct SettingsView: View {
         .frame(width: 460, height: 420)
         .onAppear {
             options = model.settings.options
-            names = model.settings.nameDictionary.joined(separator: ", ")
+            names = model.settings.nameDictionary
             sttSource = model.settings.sttSource
             sttLocale = model.settings.sttLocale
             whisperEndpoint = model.settings.whisperEndpoint
@@ -47,6 +48,7 @@ struct SettingsView: View {
             cloudProvider = model.settings.cloudProvider
             openAIModel = model.settings.openAIModel
             anthropicModel = model.settings.anthropicModel
+            soundsEnabled = model.settings.soundsEnabled
         }
     }
 
@@ -124,21 +126,22 @@ struct SettingsView: View {
             Text("Restores lists and email structure in longer dictations, using only words you said.")
                 .font(.caption).foregroundStyle(.secondary)
 
+            Section("Sound") {
+                Toggle("Play sounds", isOn: $soundsEnabled)
+                Text("A short tone when text is pasted, and a ping when you let go of the hotkey before anything was captured.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section("Name dictionary") {
-                TextField("Comma-separated", text: $names, axis: .vertical)
-                    .lineLimit(2...4)
+                NameDictionaryField(names: $names)
                 Text("Proper nouns to always spell this way.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
         .onChange(of: options) { _, new in model.settings.options = new }
-        .onChange(of: names) { _, new in
-            model.settings.nameDictionary = new
-                .split(separator: ",")
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .filter { !$0.isEmpty }
-        }
+        .onChange(of: names) { _, new in model.settings.nameDictionary = new }
+        .onChange(of: soundsEnabled) { _, new in model.settings.soundsEnabled = new }
     }
 
     private var cloudTab: some View {

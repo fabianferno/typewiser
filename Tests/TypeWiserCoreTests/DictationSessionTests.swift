@@ -3,11 +3,13 @@ import Testing
 @testable import TypeWiserCore
 
 final class FakeAudio: AudioCapturing, @unchecked Sendable {
-    /// Default is 3 samples: well under the interim loop's 8000-sample
-    /// (~0.5s) guard, so existing tests keep taking the sleep-and-retry
-    /// branch unchanged. Tests exercising the interim *success* path swap
-    /// this for a realistic buffer, e.g. `Array(repeating: 0, count: 16000)`.
-    var samples: [Int16] = [1, 2, 3]
+    /// Default sits in the window between `DictationSession`'s too-short guard
+    /// (4000 samples — below it `end()` just pings and stops) and the interim
+    /// loop's 8000-sample (~0.5s) guard, so tests reach the full transcribe
+    /// path while still taking the interim sleep-and-retry branch. Tests
+    /// exercising the interim *success* path swap this for a longer buffer,
+    /// e.g. `Array(repeating: 0, count: 16000)`.
+    var samples: [Int16] = Array(repeating: 3, count: 4_000)
     /// When set, `start()` throws this instead of succeeding, simulating a
     /// microphone that's unavailable (permission denied, no input device, …).
     var startError: Error?
@@ -131,16 +133,40 @@ private func makeSession(audio: FakeAudio = FakeAudio(),
                          whisper: FakeWhisper = FakeWhisper(),
                          rewriter: Rewriter = FakeRewriter(result: .success("Let's meet at 3.")),
                          pb: FakePasteboard = FakePasteboard(),
-                         keys: FakeKeys = FakeKeys()) -> DictationSession {
+                         keys: FakeKeys = FakeKeys(),
+                         tooShortSound: SoundPlaying? = nil) -> DictationSession {
     keys.pb = pb
     return DictationSession(
         audio: audio,
         whisper: whisper,
         rewriter: { rewriter },
         context: { FakeContext() },
-        injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1)),
-        options: { .default }
+        injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil),
+        options: { .default },
+        tooShortSound: tooShortSound
     )
+}
+
+/// Tapping the hotkey instead of holding it captures nothing worth
+/// transcribing. The session must say so audibly and stop before spending a
+/// transcription round-trip on a quarter-second of nothing.
+@Test func releasingTooQuicklyPingsAndSkipsTranscription() async {
+    let audio = FakeAudio(), whisper = FakeWhisper(), sound = FakeSound()
+    let pb = FakePasteboard()
+    audio.samples = Array(repeating: 3, count: 100)
+    let s = makeSession(audio: audio, whisper: whisper, pb: pb, tooShortSound: sound)
+    await s.begin()
+    await s.end()
+    #expect(sound.plays == 1)
+    #expect(!pb.log.contains { $0.hasPrefix("set:") }, "nothing should be pasted")
+}
+
+@Test func normalDictationDoesNotPing() async {
+    let sound = FakeSound()
+    let s = makeSession(tooShortSound: sound)
+    await s.begin()
+    await s.end()
+    #expect(sound.plays == 0)
 }
 
 @Test func happyPathInjectsRewrittenText() async {
@@ -369,7 +395,7 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
         whisper: FakeWhisper(),
         rewriter: { rewriter },
         context: { factory.make() },
-        injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1)),
+        injector: TextInjector(pasteboard: pb, keys: keys, restoreDelay: .milliseconds(1), sound: nil),
         options: { .default }
     )
 
@@ -406,7 +432,7 @@ func anyRewriterFailureStillInjectsRawTranscript(_ error: RewriteError) async {
         whisper: FakeWhisper(),
         rewriter: { rewriter },
         context: { factory.make() },
-        injector: TextInjector(pasteboard: FakePasteboard(), keys: FakeKeys(), restoreDelay: .milliseconds(1)),
+        injector: TextInjector(pasteboard: FakePasteboard(), keys: FakeKeys(), restoreDelay: .milliseconds(1), sound: nil),
         options: { .default }
     )
 

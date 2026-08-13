@@ -19,6 +19,13 @@ public actor DictationSession {
     private let makeContext: @Sendable () -> ContextReading
     private let injector: TextInjector
     private let makeOptions: @Sendable () -> RewriteOptions
+    private let tooShortSound: SoundPlaying?
+
+    /// Below this, the hotkey was tapped rather than held: 16kHz mono, so this
+    /// is a quarter-second. Nothing usable can be transcribed from it, and the
+    /// recognizer would otherwise answer with either silence or a hallucinated
+    /// word after a pointless round-trip.
+    static let minimumSampleCount = 4_000
 
     private var interimTask: Task<Void, Never>?
     private var continuation: AsyncStream<SessionPhase>.Continuation?
@@ -62,7 +69,9 @@ public actor DictationSession {
                 rewriter: @escaping @Sendable () -> Rewriter,
                 context: @escaping @Sendable () -> ContextReading,
                 injector: TextInjector,
-                options: @escaping @Sendable () -> RewriteOptions) {
+                options: @escaping @Sendable () -> RewriteOptions,
+                tooShortSound: SoundPlaying? = SystemSoundPlayer(.tooShort)) {
+        self.tooShortSound = tooShortSound
         self.audio = audio
         self.whisper = whisper
         self.makeRewriter = rewriter
@@ -147,6 +156,17 @@ public actor DictationSession {
         TWLog.session.info(
             "dictation ended: \(samples.count) samples (~\(samples.count / 16_000)s), rms \(rms, format: .fixed(precision: 5)), peak \(peak)/32767")
         CaptureDump.saveIfEnabled(samples)   // no-op unless the user opted in
+
+        // A tap, not a hold. Say so with a sound: the HUD has already come and
+        // gone by now, so silently returning to idle is indistinguishable from
+        // dictation that failed.
+        guard samples.count >= Self.minimumSampleCount else {
+            TWLog.session.info("released too quickly (\(samples.count) samples), nothing captured")
+            tooShortSound?.play()
+            emit(.idle)
+            return
+        }
+
         emit(.transcribing)
 
         let transcript: String

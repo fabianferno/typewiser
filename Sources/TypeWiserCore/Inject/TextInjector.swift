@@ -61,13 +61,16 @@ public struct TextInjector: Sendable {
     private let pasteboard: Pasteboarding
     private let keys: KeystrokeSending
     private let restoreDelay: Duration
+    private let sound: SoundPlaying?
 
     public init(pasteboard: Pasteboarding = SystemPasteboard(),
                 keys: KeystrokeSending = SystemKeystrokeSender(),
-                restoreDelay: Duration = .milliseconds(200)) {
+                restoreDelay: Duration = .milliseconds(200),
+                sound: SoundPlaying? = SystemSoundPlayer(.paste)) {
         self.pasteboard = pasteboard
         self.keys = keys
         self.restoreDelay = restoreDelay
+        self.sound = sound
     }
 
     public func insert(_ text: String) async {
@@ -75,6 +78,7 @@ public struct TextInjector: Sendable {
         let saved = pasteboard.snapshot()
         pasteboard.set(string: text)
         keys.sendCommandV()
+        sound?.play()
         // The paste is asynchronous in the target app. Restoring immediately
         // races it and pastes the *old* clipboard contents instead.
         try? await Task.sleep(for: restoreDelay)
