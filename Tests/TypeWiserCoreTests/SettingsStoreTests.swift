@@ -9,10 +9,10 @@ private func freshDefaults() -> UserDefaults {
     return d
 }
 
-@Test func defaultsHaveAllRulesOnAndLocalMode() {
+@Test func defaultsHaveAllRulesOnAndOnDeviceMode() {
     let s = SettingsStore(defaults: freshDefaults())
     #expect(s.options == RewriteOptions.default)
-    #expect(s.mode == .local)
+    #expect(s.mode == .onDevice)
     #expect(s.nameDictionary.isEmpty)
 }
 

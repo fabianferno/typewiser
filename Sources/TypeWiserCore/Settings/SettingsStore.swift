@@ -1,7 +1,10 @@
 import Foundation
 
+/// Where cleanup runs. `onDevice` (Apple Intelligence, with built-in rules
+/// underneath — see `OnDeviceRewriter`) is the default because it needs no
+/// setup: `local` wants a ~17GB llama.cpp model and `cloud` wants an API key.
 public enum EngineMode: String, Codable, Sendable {
-    case local, cloud
+    case onDevice, local, cloud
 }
 
 /// Which hosted LLM cleans up the transcript when the engine is set to Cloud.
@@ -71,7 +74,7 @@ public final class SettingsStore: @unchecked Sendable {
     }
 
     public var mode: EngineMode {
-        get { EngineMode(rawValue: defaults.string(forKey: Key.mode) ?? "") ?? .local }
+        get { EngineMode(rawValue: defaults.string(forKey: Key.mode) ?? "") ?? .onDevice }
         set { defaults.set(newValue.rawValue, forKey: Key.mode) }
     }
 

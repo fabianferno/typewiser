@@ -70,6 +70,17 @@ func goldenBedrock() async throws {
     }
 }
 
+// Opt-in: needs Apple Intelligence enabled. Run with TYPEWISER_GOLDEN_ONDEVICE=1.
+@Test(.enabled(if: ProcessInfo.processInfo.environment["TYPEWISER_GOLDEN_ONDEVICE"] == "1"))
+func goldenOnDevice() async throws {
+    let r = OnDeviceRewriter(timeout: .seconds(30))
+    for c in try loadCases() {
+        let out = try await r.rewrite(c.input, options: .default, context: .empty)
+        print("[golden:\(c.name)] \(out)")
+        check(c, out)
+    }
+}
+
 @Test func namesFromDictionaryReachThePrompt() {
     let ctx = RewriteContext(surroundingText: nil, appName: nil, nameDictionary: ["Crevn", "Fabian Ferno"])
     var o = RewriteOptions.default
