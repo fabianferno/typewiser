@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TypeWiser: hold 🌐, speak, release</title>
+  <meta name="description" content="Private voice dictation for macOS. Hold the globe key, speak, release, and cleaned-up text lands in whatever app has focus. On-device by default. Open source.">
+  <meta property="og:title" content="TypeWiser">
+  <meta property="og:description" content="Hold 🌐, speak, release. Clean text in any Mac app. On-device by default.">
+  <meta property="og:image" content="icon.png">
+  <link rel="icon" href="icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="preload" href="fonts/OrientalChicken.ttf?v=1" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="style.css?v=5">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#">
+        <img src="icon.png" alt="" width="32" height="32">
+        <span>TypeWiser</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="#privacy">Privacy</a>
+        <a href="#features">Features</a>
+        <a href="#engines">Engines</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="nav-cta">
+        <a class="gh" href="https://github.com/fabianferno/typewiser" aria-label="TypeWiser on GitHub">
+          <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          <span>GitHub</span>
+        </a>
+        <a class="btn btn-sm" href="#get">
+          <svg viewBox="0 0 384 512" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          Get TypeWiser
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="wrap hero">
+      <div class="hero-left">
+        <h1>Hold <span class="globe-key" aria-label="globe key">🌐</span>, speak, release.<br>Clean text in any app.</h1>
+        <ul class="trust">
+          <li><span class="trust-ico">◉</span>On-device speech</li>
+          <li><span class="trust-ico">⌘</span>Native macOS</li>
+          <li><span class="trust-ico">{ }</span>Apache 2.0</li>
+          <li><span class="trust-ico">∅</span>No account</li>
+        </ul>
+      </div>
+      <div class="hero-right">
+        <p class="lede">Dictation that cleans up after you. Filler words, false starts, and “actually, make that three” are gone before the text hits the page. Your audio never has to leave your Mac.</p>
+        <a class="btn" href="#get">
+          <svg viewBox="0 0 384 512" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          Get TypeWiser for Mac
+        </a>
+        <p class="fine">Free and open source · macOS 15 or later</p>
+      </div>
+    </section>
+
+    <!-- Sky demo panel -->
+    <section class="wrap-wide">
+      <div class="sky">
+        <div class="cloud c1"></div><div class="cloud c2"></div><div class="cloud c3"></div>
+        <div class="floaters" aria-hidden="true">
+          <span class="fl f1">✉️</span><span class="fl f2">💬</span><span class="fl f3">📝</span><span class="fl f4">🧭</span>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Demo">
+          <button role="tab" aria-selected="true" data-demo="0">🎙️ Hold to talk</button>
+          <button role="tab" aria-selected="false" data-demo="1">↺ Self-correction</button>
+          <button role="tab" aria-selected="false" data-demo="2">🔒 Hands-free</button>
+        </div>
+
+        <div class="device">
+          <div class="window">
+            <div class="win-bar">
+              <i></i><i></i><i></i>
+              <span class="win-title" id="demo-app">Slack · #product</span>
+            </div>
+            <div class="win-body">
+              <div class="row-label">You said <span class="pill pill-raw">raw transcript</span></div>
+              <p class="raw" id="demo-raw"></p>
+              <div class="row-label">TypeWiser pasted <span class="pill pill-clean">cleaned</span></div>
+              <div class="composer">
+                <p class="clean" id="demo-clean"><span class="caret"></span></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="hud" id="hud" aria-hidden="true">
+            <span class="hud-dot"></span>
+            <span class="wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            <span class="hud-label" id="hud-label">Listening</span>
+          </div>
+        </div>
+
+        <div class="keycap-row" aria-hidden="true">
+          <span class="keycap" id="keycap">fn<br><b>🌐</b></span>
+          <span class="keyhint" id="keyhint">hold</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy -->
+    <section class="wrap section" id="privacy">
+      <h2>Your words stay yours.</h2>
+      <div class="grid-2">
+        <article class="pcard">
+          <div class="pviz viz-mac">
+            <div class="mini-mac"><span>🎙️</span><span class="arrow">→</span><span>Aa</span></div>
+            <small>Apple Speech · on device</small>
+          </div>
+          <div>
+            <h3>Speech never leaves your Mac</h3>
+            <p>Transcription runs on Apple’s on-device Speech framework by default. No server, no model download, nothing uploaded.</p>
+          </div>
+        </article>
+        <article class="pcard">
+          <div class="pviz viz-big"><b>0</b><small>accounts required</small></div>
+          <div>
+            <h3>Cloud is your call</h3>
+            <p>Want a bigger brain for cleanup? Point it at Bedrock, OpenAI, or Anthropic with your own key. Or keep it all local with llama.cpp.</p>
+          </div>
+        </article>
+        <article class="pcard">
+          <div class="pviz viz-key">
+            <div class="keychain"><span>🔑</span><small>macOS Keychain</small></div>
+          </div>
+          <div>
+            <h3>Keys live in the Keychain</h3>
+            <p>API credentials go into the macOS Keychain, not a config file. Nothing about you is sent to us, because there is no “us” server.</p>
+          </div>
+        </article>
+        <article class="pcard">
+          <div class="pviz viz-repo">
+            <div class="repo"><span class="repo-name">typewiser</span><span class="repo-tag">Apache-2.0</span><small>Swift · 140+ tests</small></div>
+          </div>
+          <div>
+            <h3>Open source. Read every line.</h3>
+            <p>The whole app is Swift you can audit and build yourself, under the Apache 2.0 license.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Features bento -->
+    <section class="wrap section" id="features">
+      <h2>What you get</h2>
+      <p class="sub">Push-to-talk dictation, LLM cleanup, hands-free mode, and a fallback that never eats your words.</p>
+
+      <div class="bento">
+        <!-- Engines -->
+        <article class="card span-2" id="engines">
+          <h3>Your Mac. Your models.</h3>
+          <p>Pick where speech-to-text and cleanup run. Switch any time; the change applies on your next dictation.</p>
+          <div class="seg" role="tablist" aria-label="Engine type">
+            <button role="tab" aria-selected="true" data-seg="stt">Speech-to-text</button>
+            <button role="tab" aria-selected="false" data-seg="llm">Cleanup model</button>
+          </div>
+          <ul class="engine-list" data-list="stt">
+            <li class="on"><span class="eng">Apple Speech</span><span class="tag">On device</span><span class="meta">Default · no download</span></li>
+            <li><span class="eng">whisper.cpp server</span><span class="tag">Self-hosted</span><span class="meta">Your own endpoint</span></li>
+          </ul>
+          <ul class="engine-list" data-list="llm" hidden>
+            <li class="on"><span class="eng">llama.cpp</span><span class="tag">Local</span><span class="meta">Gemma, speculative decoding</span></li>
+            <li><span class="eng">AWS Bedrock</span><span class="tag">Cloud</span><span class="meta">Nova Lite</span></li>
+            <li><span class="eng">OpenAI</span><span class="tag">Cloud</span><span class="meta">Chat Completions</span></li>
+            <li><span class="eng">Anthropic</span><span class="tag">Cloud</span><span class="meta">Messages API</span></li>
+          </ul>
+        </article>
+
+        <!-- Self-correction -->
+        <article class="card">
+          <h3>It keeps the last thing you meant.</h3>
+          <p>Change your mind mid-sentence and only the correction survives.</p>
+          <div class="said">
+            <small>You said</small>
+            <p>“um so let's meet at two, <s>actually</s> no, three, at the usual place”</p>
+          </div>
+          <div class="got">
+            <small>Pasted</small>
+            <p>Let’s meet at 3 at the usual place.</p>
+          </div>
+        </article>
+
+        <!-- Names -->
+        <article class="card">
+          <h3>It spells names right.</h3>
+          <p>Add the people and jargon you say often. TypeWiser also reads text near your cursor to match spellings already on screen.</p>
+          <div class="chips">
+            <span class="chip-input">Add a name…<b>+</b></span>
+            <span class="chip">Priyanka</span><span class="chip">Kubernetes</span><span class="chip">gRPC</span><span class="chip">Figma</span><span class="chip">PostgreSQL</span>
+          </div>
+        </article>
+
+        <!-- Hands-free -->
+        <article class="card">
+          <h3>Double-tap for hands-free.</h3>
+          <p>Long thought? Double-tap 🌐 and let go. Recording latches on, and typing won’t interrupt it. Tap once to stop.</p>
+          <div class="taps">
+            <span class="tap t1">🌐</span><span class="tap t2">🌐</span><span class="latch">🔒 Recording latched</span>
+          </div>
+        </article>
+
+        <!-- Accent -->
+        <article class="card">
+          <h3>Tuned to your accent.</h3>
+          <p>Pick the speech locale that matches how you talk, not just your system language.</p>
+          <div class="locales">
+            <span>🇺🇸 English (US)</span><span class="on">🇮🇳 English (India)</span><span>🇬🇧 English (UK)</span><span>🇦🇺 English (AU)</span>
+          </div>
+        </article>
+
+        <!-- Apps marquee -->
+        <article class="card span-2">
+          <h3>Works wherever you can type.</h3>
+          <p>Slack, Mail, Notes, Cursor, Claude, a terminal. If the app has a text cursor, TypeWiser pastes into it.</p>
+          <div class="marquee" aria-hidden="true">
+            <div class="track">
+              <span><img class="ico" src="logos/slack.png" alt="" width="22" height="22">Slack</span><span><img class="ico" src="logos/mail.png" alt="" width="22" height="22">Mail</span><span><img class="ico" src="logos/notes.png" alt="" width="22" height="22">Notes</span><span><img class="ico" src="logos/cursor.png" alt="" width="22" height="22">Cursor</span><span><img class="ico" src="logos/claude.png" alt="" width="22" height="22">Claude</span><span><img class="ico" src="logos/chatgpt.png" alt="" width="22" height="22">ChatGPT</span><span><img class="ico" src="logos/messages.png" alt="" width="22" height="22">Messages</span><span><img class="ico" src="logos/xcode.png" alt="" width="22" height="22">Xcode</span><span><img class="ico" src="logos/terminal.png" alt="" width="22" height="22">Terminal</span><span><i class="ico mask" style="--m:url(data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+TGluZWFyPC90aXRsZT48cGF0aCBkPSJNMi44ODYgNC4xOEExMS45ODIgMTEuOTgyIDAgMCAxIDExLjk5IDBDMTguNjI0IDAgMjQgNS4zNzYgMjQgMTIuMDA5YzAgMy42NC0xLjYyIDYuOTAzLTQuMTggOS4xMDVMMi44ODcgNC4xOFpNMS44MTcgNS42MjZsMTYuNTU2IDE2LjU1NmMtLjUyNC4zMy0xLjA3NS42Mi0xLjY1Ljg2NkwuOTUxIDcuMjc3Yy4yNDctLjU3NS41MzctMS4xMjYuODY2LTEuNjVaTS4zMjIgOS4xNjNsMTQuNTE1IDE0LjUxNWMtLjcxLjE3Mi0xLjQ0My4yODItMi4xOTUuMzIyTDAgMTEuMzU4YTEyIDEyIDAgMCAxIC4zMjItMi4xOTVabS0uMTcgNC44NjIgOS44MjMgOS44MjRhMTIuMDIgMTIuMDIgMCAwIDEtOS44MjQtOS44MjRaIi8+PC9zdmc+);--c:#5E6AD2"></i>Linear</span><span><i class="ico mask" style="--m:url(data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+Tm90aW9uPC90aXRsZT48cGF0aCBkPSJNNC40NTkgNC4yMDhjLjc0Ni42MDYgMS4wMjYuNTYgMi40MjguNDY2bDEzLjIxNS0uNzkzYy4yOCAwIC4wNDctLjI4LS4wNDYtLjMyNkwxNy44NiAxLjk2OGMtLjQyLS4zMjYtLjk4MS0uNy0yLjA1NS0uNjA3TDMuMDEgMi4yOTVjLS40NjYuMDQ2LS41Ni4yOC0uMzc0LjQ2NnptLjc5MyAzLjA4djEzLjkwNGMwIC43NDcuMzczIDEuMDI3IDEuMjE0Ljk4bDE0LjUyMy0uODRjLjg0MS0uMDQ2LjkzNS0uNTYuOTM1LTEuMTY3VjYuMzU0YzAtLjYwNi0uMjMzLS45MzMtLjc0OC0uODg3bC0xNS4xNzcuODg3Yy0uNTYuMDQ3LS43NDcuMzI3LS43NDcuOTMzem0xNC4zMzcuNzQ1Yy4wOTMuNDIgMCAuODQtLjQyLjg4OGwtLjcuMTR2MTAuMjY0Yy0uNjA4LjMyNy0xLjE2OC41MTQtMS42MzUuNTE0LS43NDggMC0uOTM1LS4yMzQtMS40OTUtLjkzM2wtNC41NzctNy4xODZ2Ni45NTJMMTIuMjEgMTlzMCAuODQtMS4xNjguODRsLTMuMjIyLjE4NmMtLjA5My0uMTg2IDAtLjY1My4zMjctLjc0NmwuODQtLjIzM1Y5Ljg1NEw3LjgyMiA5Ljc2Yy0uMDk0LS40Mi4xNC0xLjAyNi43OTMtMS4wNzNsMy40NTYtLjIzMyA0Ljc2NCA3LjI3OXYtNi40NGwtMS4yMTUtLjEzOWMtLjA5My0uNTE0LjI4LS44ODcuNzQ3LS45MzN6TTEuOTM2IDEuMDM1bDEzLjMxLS45OGMxLjYzNC0uMTQgMi4wNTUtLjA0NyAzLjA4Mi43bDQuMjQ5IDIuOTg2Yy43LjUxMy45MzQuNjUzLjkzNCAxLjIxM3YxNi4zNzhjMCAxLjAyNi0uMzczIDEuNjM0LTEuNjggMS43MjZsLTE1LjQ1OC45MzRjLS45OC4wNDctMS40NDgtLjA5My0xLjk2Mi0uNzQ3bC0zLjEyOS00LjA2Yy0uNTYtLjc0Ny0uNzkzLTEuMzA2LS43OTMtMS45NlYyLjY2N2MwLS44MzkuMzc0LTEuNTQgMS40NDctMS42MzJ6Ii8+PC9zdmc+);--c:#000000"></i>Notion</span><span><i class="ico mask" style="--m:url(data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+R29vZ2xlIERvY3M8L3RpdGxlPjxwYXRoIGQ9Ik0xNC43MjcgNi43MjdIMTRWMEg0LjkxYy0uOTA1IDAtMS42MzcuNzMyLTEuNjM3IDEuNjM2djIwLjcyOGMwIC45MDQuNzMyIDEuNjM2IDEuNjM2IDEuNjM2aDE0LjE4MmMuOTA0IDAgMS42MzYtLjczMiAxLjYzNi0xLjYzNlY2LjcyN2gtNnptLS41NDUgMTAuNDU1SDcuMDl2LTEuMzY0aDcuMDl2MS4zNjR6bTIuNzI3LTMuMjczSDcuMDkxdi0xLjM2NGg5LjgxOHYxLjM2NHptMC0zLjI3M0g3LjA5MVY5LjI3M2g5LjgxOHYxLjM2M3pNMTQuNzI3IDZoNmwtNi02djZ6Ii8+PC9zdmc+);--c:#4285F4"></i>Google Docs</span>
+              <span><img class="ico" src="logos/slack.png" alt="" width="22" height="22">Slack</span><span><img class="ico" src="logos/mail.png" alt="" width="22" height="22">Mail</span><span><img class="ico" src="logos/notes.png" alt="" width="22" height="22">Notes</span><span><img class="ico" src="logos/cursor.png" alt="" width="22" height="22">Cursor</span><span><img class="ico" src="logos/claude.png" alt="" width="22" height="22">Claude</span><span><img class="ico" src="logos/chatgpt.png" alt="" width="22" height="22">ChatGPT</span><span><img class="ico" src="logos/messages.png" alt="" width="22" height="22">Messages</span><span><img class="ico" src="logos/xcode.png" alt="" width="22" height="22">Xcode</span><span><img class="ico" src="logos/terminal.png" alt="" width="22" height="22">Terminal</span><span><i class="ico mask" style="--m:url(data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+TGluZWFyPC90aXRsZT48cGF0aCBkPSJNMi44ODYgNC4xOEExMS45ODIgMTEuOTgyIDAgMCAxIDExLjk5IDBDMTguNjI0IDAgMjQgNS4zNzYgMjQgMTIuMDA5YzAgMy42NC0xLjYyIDYuOTAzLTQuMTggOS4xMDVMMi44ODcgNC4xOFpNMS44MTcgNS42MjZsMTYuNTU2IDE2LjU1NmMtLjUyNC4zMy0xLjA3NS42Mi0xLjY1Ljg2NkwuOTUxIDcuMjc3Yy4yNDctLjU3NS41MzctMS4xMjYuODY2LTEuNjVaTS4zMjIgOS4xNjNsMTQuNTE1IDE0LjUxNWMtLjcxLjE3Mi0xLjQ0My4yODItMi4xOTUuMzIyTDAgMTEuMzU4YTEyIDEyIDAgMCAxIC4zMjItMi4xOTVabS0uMTcgNC44NjIgOS44MjMgOS44MjRhMTIuMDIgMTIuMDIgMCAwIDEtOS44MjQtOS44MjRaIi8+PC9zdmc+);--c:#5E6AD2"></i>Linear</span><span><i class="ico mask" style="--m:url(data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+Tm90aW9uPC90aXRsZT48cGF0aCBkPSJNNC40NTkgNC4yMDhjLjc0Ni42MDYgMS4wMjYuNTYgMi40MjguNDY2bDEzLjIxNS0uNzkzYy4yOCAwIC4wNDctLjI4LS4wNDYtLjMyNkwxNy44NiAxLjk2OGMtLjQyLS4zMjYtLjk4MS0uNy0yLjA1NS0uNjA3TDMuMDEgMi4yOTVjLS40NjYuMDQ2LS41Ni4yOC0uMzc0LjQ2NnptLjc5MyAzLjA4djEzLjkwNGMwIC43NDcuMzczIDEuMDI3IDEuMjE0Ljk4bDE0LjUyMy0uODRjLjg0MS0uMDQ2LjkzNS0uNTYuOTM1LTEuMTY3VjYuMzU0YzAtLjYwNi0uMjMzLS45MzMtLjc0OC0uODg3bC0xNS4xNzcuODg3Yy0uNTYuMDQ3LS43NDcuMzI3LS43NDcuOTMzem0xNC4zMzcuNzQ1Yy4wOTMuNDIgMCAuODQtLjQyLjg4OGwtLjcuMTR2MTAuMjY0Yy0uNjA4LjMyNy0xLjE2OC41MTQtMS42MzUuNTE0LS43NDggMC0uOTM1LS4yMzQtMS40OTUtLjkzM2wtNC41NzctNy4xODZ2Ni45NTJMMTIuMjEgMTlzMCAuODQtMS4xNjguODRsLTMuMjIyLjE4NmMtLjA5My0uMTg2IDAtLjY1My4zMjctLjc0NmwuODQtLjIzM1Y5Ljg1NEw3LjgyMiA5Ljc2Yy0uMDk0LS40Mi4xNC0xLjAyNi43OTMtMS4wNzNsMy40NTYtLjIzMyA0Ljc2NCA3LjI3OXYtNi40NGwtMS4yMTUtLjEzOWMtLjA5My0uNTE0LjI4LS44ODcuNzQ3LS45MzN6TTEuOTM2IDEuMDM1bDEzLjMxLS45OGMxLjYzNC0uMTQgMi4wNTUtLjA0NyAzLjA4Mi43bDQuMjQ5IDIuOTg2Yy43LjUxMy45MzQuNjUzLjkzNCAxLjIxM3YxNi4zNzhjMCAxLjAyNi0uMzczIDEuNjM0LTEuNjggMS43MjZsLTE1LjQ1OC45MzRjLS45OC4wNDctMS40NDgtLjA5My0xLjk2Mi0uNzQ3bC0zLjEyOS00LjA2Yy0uNTYtLjc0Ny0uNzkzLTEuMzA2LS43OTMtMS45NlYyLjY2N2MwLS44MzkuMzc0LTEuNTQgMS40NDctMS42MzJ6Ii8+PC9zdmc+);--c:#000000"></i>Notion</span><span><i class="ico mask" style="--m:url(data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHZpZXdCb3g9IjAgMCAyNCAyNCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48dGl0bGU+R29vZ2xlIERvY3M8L3RpdGxlPjxwYXRoIGQ9Ik0xNC43MjcgNi43MjdIMTRWMEg0LjkxYy0uOTA1IDAtMS42MzcuNzMyLTEuNjM3IDEuNjM2djIwLjcyOGMwIC45MDQuNzMyIDEuNjM2IDEuNjM2IDEuNjM2aDE0LjE4MmMuOTA0IDAgMS42MzYtLjczMiAxLjYzNi0xLjYzNlY2LjcyN2gtNnptLS41NDUgMTAuNDU1SDcuMDl2LTEuMzY0aDcuMDl2MS4zNjR6bTIuNzI3LTMuMjczSDcuMDkxdi0xLjM2NGg5LjgxOHYxLjM2NHptMC0zLjI3M0g3LjA5MVY5LjI3M2g5LjgxOHYxLjM2M3pNMTQuNzI3IDZoNmwtNi02djZ6Ii8+PC9zdmc+);--c:#4285F4"></i>Google Docs</span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Never lose words -->
+        <article class="card">
+          <h3>Never loses your words.</h3>
+          <p>If cleanup fails, times out, or returns something that isn’t a rewrite of what you said, you get the raw transcript instead.</p>
+          <div class="fallback">
+            <span class="fb-step bad">Rewrite timed out</span>
+            <span class="fb-arrow">↓</span>
+            <span class="fb-step ok">Raw transcript pasted</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="wrap section">
+      <h2>Three seconds to set up a habit.</h2>
+      <ol class="steps">
+        <li><span class="num">1</span><h3>Hold 🌐</h3><p>A small HUD shows a live waveform so you know it’s listening.</p></li>
+        <li><span class="num">2</span><h3>Speak naturally</h3><p>Ramble, restart, correct yourself. That’s what cleanup is for.</p></li>
+        <li><span class="num">3</span><h3>Release</h3><p>Clean text is pasted into the focused app, with a soft sound cue.</p></li>
+      </ol>
+    </section>
+
+    <!-- FAQ -->
+    <section class="wrap section" id="faq">
+      <h2>Common questions</h2>
+      <div class="faq">
+        <details>
+          <summary>Does my audio get uploaded anywhere?</summary>
+          <p>Not by default. Speech-to-text uses Apple’s on-device Speech framework. Only if you switch to a whisper.cpp server does audio leave the app, and that server is one you run. If you choose a cloud cleanup model, only the text transcript is sent, to the provider you picked, with your own key.</p>
+        </details>
+        <details>
+          <summary>Do I need an account or subscription?</summary>
+          <p>No. TypeWiser is free and open source. Local mode costs nothing to run. Cloud cleanup bills against your own Bedrock, OpenAI, or Anthropic account.</p>
+        </details>
+        <details>
+          <summary>Which apps does it work with?</summary>
+          <p>Anything that accepts pasted text. TypeWiser puts the cleaned text on the clipboard and sends ⌘V to whatever app has focus.</p>
+        </details>
+        <details>
+          <summary>Why does it need Accessibility permission?</summary>
+          <p>To notice the 🌐 key from any app and to paste with ⌘V. Without it, macOS silently drops both. It also lets TypeWiser read text near your cursor so names are spelled the way they already appear.</p>
+        </details>
+        <details>
+          <summary>The emoji picker opens when I press 🌐.</summary>
+          <p>Go to System Settings → Keyboard → “Press 🌐 key to” and choose Do Nothing.</p>
+        </details>
+        <details>
+          <summary>How heavy is local mode?</summary>
+          <p>The local cleanup model runs through llama.cpp and holds around 17 GB of RAM while active. Switching to a cloud model shuts the local server down and gives that memory back right away.</p>
+        </details>
+        <details>
+          <summary>Does it understand my accent?</summary>
+          <p>Choose a speech locale in Settings that matches how you speak, like English (India) or English (UK). It often makes a large difference over the system default.</p>
+        </details>
+        <details>
+          <summary>Can I contribute?</summary>
+          <p>Yes. It’s a Swift package with a fast test suite that never touches the network. Open an issue or a pull request on GitHub.</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- CTA -->
+    <section class="wrap section" id="get">
+      <div class="cta">
+        <img src="icon.png" alt="" width="64" height="64">
+        <h2>Talk less like a robot. Type less, period.</h2>
+        <p>Build it from source in a minute. Native Swift, macOS 15 or later.</p>
+        <pre class="code"><code><span class="c"># one-time: a stable signing identity so permissions stick</span>
+./Scripts/create-signing-cert.sh
+./Scripts/bundle-app.sh
+open build/TypeWiser.app</code><button class="copy" type="button" aria-label="Copy commands">Copy</button></pre>
+        <a class="btn" href="https://github.com/fabianferno/typewiser">View on GitHub</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="wrap foot-inner">
+      <div class="foot-brand">
+        <a class="brand" href="#"><img src="icon.png" alt="" width="28" height="28"><span>TypeWiser</span></a>
+        <p>Private voice dictation for macOS.</p>
+      </div>
+      <div class="foot-cols">
+        <div><h4>Product</h4><a href="#features">Features</a><a href="#engines">Engines</a><a href="#privacy">Privacy</a></div>
+        <div><h4>Resources</h4><a href="https://github.com/fabianferno/typewiser">Source</a><a href="https://github.com/fabianferno/typewiser/blob/main/SETUP.md">Setup guide</a><a href="#faq">FAQ</a></div>
+      </div>
+    </div>
+    <div class="wrap foot-legal">© 2026 TypeWiser · Apache License 2.0</div>
+  </footer>
+
+  <script src="main.js?v=3"></script>
+</body>
+</html>
