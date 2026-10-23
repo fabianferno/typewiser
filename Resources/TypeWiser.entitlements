@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Notarization requires the hardened runtime, and under it the
+         microphone is blocked unless this is declared — the permission prompt
+         never even appears. Not sandboxed: posting ⌘V to other apps and
+         reading text near their cursor are both impossible in the sandbox. -->
+    <key>com.apple.security.device.audio-input</key><true/>
+</dict>
+</plist>

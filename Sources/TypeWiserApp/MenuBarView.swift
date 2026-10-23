@@ -8,6 +8,7 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("Engine", selection: $model.mode) {
+                Text("On-device").tag(EngineMode.onDevice)
                 Text("Local").tag(EngineMode.local)
                 Text("Cloud").tag(EngineMode.cloud)
             }
@@ -47,6 +48,12 @@ struct MenuBarView: View {
             // Activating first, then ordering the window front once SwiftUI
             // has created it, puts it where any other window would go.
             Button("Settings…") { openSettingsWindowInFront() }
+            if model.updater.isAvailable {
+                Button("Check for Updates…") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    model.updater.checkForUpdates()
+                }
+            }
             Button("Quit") { NSApplication.shared.terminate(nil) }
         }
         .padding(12)
@@ -73,6 +80,13 @@ struct MenuBarView: View {
 
     private var statusText: String {
         switch model.mode {
+        case .onDevice:
+            switch OnDeviceRewriter.modelStatus {
+            case .available: return "Apple Intelligence · on device"
+            case .downloading: return "Basic cleanup · Apple Intelligence still downloading"
+            case .notEnabled: return "Basic cleanup · turn on Apple Intelligence for more"
+            case .unsupported: return "Basic cleanup · on device"
+            }
         case .cloud:
             guard model.hasCloudCredentials() else {
                 return "Cloud · no credentials — add them in Settings"

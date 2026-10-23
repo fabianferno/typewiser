@@ -52,6 +52,8 @@ final class AppModel {
     /// instant another phase arrives so a new dictation started inside the
     /// 1.5s window can't have this stale timer yank the HUD back down.
     private var hudHideTask: Task<Void, Never>?
+    private let welcome = WelcomeWindowController()
+    let updater = Updater()
 
     init() {
         let trusted = HotkeyMonitor.hasAccessibilityPermission()
@@ -115,6 +117,8 @@ final class AppModel {
             whisper: { [transcribers] in transcribers.current() },
             rewriter: {
                 switch settings.mode {
+                case .onDevice:
+                    return OnDeviceRewriter()
                 case .local:
                     return LocalLlamaRewriter()
                 case .cloud:
@@ -163,6 +167,15 @@ final class AppModel {
             // that case.
             HotkeyMonitor.requestAccessibilityPermission()
             watchForAccessibilityGrant()
+        }
+
+        // Deferred a turn so it lands after the menu bar item exists, and
+        // after the Accessibility prompt above has had its chance to appear.
+        if !SetupChecks.requiredAreMet(self) {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.welcome.show(model: self)
+            }
         }
     }
 
@@ -266,13 +279,14 @@ final class AppModel {
         Task { _ = await AppleSpeechTranscriber.requestAuthorization() }
     }
 
-    /// Local spawns llama-server; Cloud kills it to reclaim ~17GB of RAM and the GPU.
+    /// Local spawns llama-server; the other modes kill it to reclaim ~17GB of
+    /// RAM and the GPU.
     func applyMode() async {
         TWLog.app.info("applying mode: \(String(describing: self.mode), privacy: .public)")
         switch mode {
         case .local:
             await engine.start()
-        case .cloud:
+        case .onDevice, .cloud:
             await engine.stop()
         }
         engineState = await engine.state
