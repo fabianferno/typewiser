@@ -165,3 +165,28 @@ keys.forEach((k) => {
   k.addEventListener("keyup", () => up(true));
   k.addEventListener("blur", () => up(false));
 });
+
+// Floating icons in the sky panel: drag them anywhere inside the panel
+document.querySelectorAll(".floaters .fl").forEach((el) => {
+  const sky = el.closest(".sky");
+  let sx = 0, sy = 0, ox = 0, oy = 0, minX = 0, maxX = 0, minY = 0, maxY = 0;
+  const cur = () => [parseFloat(el.style.getPropertyValue("--dx")) || 0, parseFloat(el.style.getPropertyValue("--dy")) || 0];
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    el.setPointerCapture(e.pointerId);
+    [ox, oy] = cur(); sx = e.clientX; sy = e.clientY;
+    const s = sky.getBoundingClientRect(), r = el.getBoundingClientRect();
+    minX = ox + (s.left - r.left); maxX = ox + (s.right - r.right);
+    minY = oy + (s.top - r.top); maxY = oy + (s.bottom - r.bottom);
+    el.classList.add("dragging");
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!el.classList.contains("dragging")) return;
+    const x = Math.min(maxX, Math.max(minX, ox + e.clientX - sx));
+    const y = Math.min(maxY, Math.max(minY, oy + e.clientY - sy));
+    el.style.setProperty("--dx", x + "px"); el.style.setProperty("--dy", y + "px");
+  });
+  const end = () => el.classList.remove("dragging");
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+});

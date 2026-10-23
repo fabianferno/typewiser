@@ -405,3 +405,69 @@ h1, h2, .brand span {
 .copy { position: absolute; }
 .tabs { border-radius: 18px; padding: 6px 6px 9px; } /* key radius 12px + 6px padding */
 .seg { border-radius: 18px; padding: 6px 6px 9px; }
+
+/* Hero fn/globe key: a MacBook keycap sitting inline in the headline */
+.mac-key {
+  position: relative; display: inline-block; vertical-align: -.1em;
+  width: 1.08em; height: 1em; margin: 0 .1em 0 .04em;
+  font-size: .78em; border-radius: .17em; flex: none;
+  color: var(--key-ink);
+  background: linear-gradient(180deg, var(--key-top), var(--key-bot) 75%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    inset 0 -1px 1px rgba(20,28,45,.06),
+    0 .07em 0 0 var(--key-base),
+    0 .07em 0 1px var(--key-edge),
+    0 .16em .28em rgba(10,40,100,.14);
+}
+.mac-key-globe { position: absolute; bottom: .13em; left: .13em; width: .4em; height: .4em; }
+.mac-key-fn {
+  position: absolute; right: .14em; top: .12em;
+  font: 500 .27em/1 -apple-system, "SF Pro Text", system-ui, sans-serif;
+  letter-spacing: .01em;
+}
+
+.hero h1 .mac-key { font-size: .78em; }
+.mac-key-row { display: inline-block; font-size: 58px; margin: 0; vertical-align: top; }
+.mac-key.down { transform: translateY(.05em); box-shadow: inset 0 1px 2px rgba(20,28,45,.12), 0 0 0 1px var(--key-edge); }
+.mac-key { transition: transform .12s, box-shadow .12s; }
+.taps .mac-key { font-size: 44px; margin: 0 6px 4px 0; vertical-align: top; animation: mactap 2.4s ease-in-out infinite; }
+.taps .mac-key.t2 { animation-delay: .25s; }
+@keyframes mactap { 0%, 30%, 100% { transform: translateY(0); } 10% { transform: translateY(.05em); } }
+
+/* Engine segmented buttons: no outline ring, clear blue selected label */
+.seg button { box-shadow: inset 0 1px 0 rgba(255,255,255,.9), 0 var(--depth) 0 0 var(--key-base); }
+.seg button:active, .seg button.is-down, .seg button[aria-selected="true"] { box-shadow: inset 0 1px 2px rgba(20,28,45,.12); }
+.seg button[aria-selected="true"] { color: var(--sky-1); font-weight: 600; }
+
+/* Globe key inline in running text */
+.mac-key-inline { font-size: 1.25em; width: 1.3em; height: 1.1em; margin: 0 .12em; vertical-align: -.22em; }
+.mac-key-inline .mac-key-fn { font-size: .3em; }
+.mac-key-inline .mac-key-globe { width: .5em; height: .5em; }
+summary .mac-key-inline { vertical-align: -.2em; }
+h3 .mac-key-inline { font-size: 1em; }
+
+/* Apps card: pin the marquee to the bottom of the card */
+.card:has(> .marquee) { display: flex; flex-direction: column; }
+.card > .marquee { margin-top: auto; }
+
+/* Step numbers as MacBook keycaps */
+.steps .num {
+  width: 44px; height: 42px; border-radius: 9px; margin-bottom: 22px;
+  background: linear-gradient(180deg, var(--key-top), var(--key-bot) 75%);
+  color: var(--key-ink); font-size: 18px; font-weight: 500;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.95),
+    0 3px 0 0 var(--key-base),
+    0 3px 0 1px var(--key-edge),
+    0 8px 14px rgba(10,40,100,.1);
+  text-shadow: 0 1px 0 rgba(255,255,255,.8);
+}
+
+/* Demo tabs: selected label stays ink, not blue */
+.tabs button[aria-selected="true"] { color: var(--key-ink); }
+
+/* Draggable floating app icons in the sky panel */
+.floaters .fl { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; z-index: 3; translate: var(--dx, 0) var(--dy, 0); }
+.floaters .fl.dragging { cursor: grabbing; animation-play-state: paused; transform: scale(1.12); box-shadow: 0 12px 28px rgba(10,40,100,.25); transition: transform .15s, box-shadow .15s; }
+.floaters .fl.settling { transition: translate .35s cubic-bezier(.3,1.5,.5,1); }
