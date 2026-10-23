@@ -94,3 +94,30 @@ could catch — they only exist in the gap between real permissions and a real G
       `./Scripts/bundle-app.sh`, relaunch — dictation must still work. If it
       breaks, the app fell back to ad-hoc signing; check for the warning from
       bundle-app.sh and run `./Scripts/create-signing-cert.sh`.
+
+## Release build (first run as a stranger)
+
+Run these on the notarized DMG from `./Scripts/release.sh`, in a macOS user
+account that has never run TypeWiser. Your own account already has every
+permission granted, so it can't show what a new user sees.
+
+- [ ] **The DMG opens with no Gatekeeper warning** beyond the standard "downloaded
+      from the internet" prompt, and dragging to Applications works.
+- [ ] **The welcome window appears in front on first launch**, not behind other
+      windows, and lists Accessibility, Microphone, Speech Recognition and the
+      🌐 key, each with a working Fix… button.
+- [ ] **The Microphone Fix… button shows the system prompt.** If it doesn't, the
+      hardened-runtime audio entitlement is missing from the signature.
+- [ ] **Rows flip to green on returning from System Settings**, without pressing
+      Re-check.
+- [ ] **The welcome window does not reappear** on the next launch once
+      everything is green.
+- [ ] **On-device mode with Apple Intelligence on:** say "let's meet at two,
+      actually three". You should get "Let's meet at 3." The menu reads "Apple
+      Intelligence · on device".
+- [ ] **On-device mode with Apple Intelligence off** (or on macOS 15): say "um so
+      we should ship it". You should get "So we should ship it." The menu reads
+      "Basic cleanup …".
+- [ ] **Check for Updates… appears in the menu** and reports "You're up to date"
+      (or offers the newer release). It must not show an error about a missing
+      public key.

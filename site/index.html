@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="preload" href="fonts/OrientalChicken.ttf?v=1" as="font" type="font/ttf" crossorigin>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -56,12 +56,12 @@
         </ul>
       </div>
       <div class="hero-right">
-        <p class="lede">Dictation that cleans up after you. Filler words, false starts, and “actually, make that three” are gone before the text hits the page. Your audio never has to leave your Mac.</p>
-        <a class="btn" href="#get">
+        <p class="lede">Dictation that cleans up after you. Filler words, false starts, and “actually, make that three” are gone before the text hits the page. Out of the box, nothing leaves your Mac.</p>
+        <a class="btn" href="https://github.com/fabianferno/typewiser/releases/latest/download/TypeWiser.dmg">
           <svg viewBox="0 0 384 512" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
           Get TypeWiser for Mac
         </a>
-        <p class="fine">Free and open source · macOS 15 or later</p>
+        <p class="fine">Free and open source · macOS 15 or later · Apple silicon and Intel</p>
       </div>
     </section>
 
@@ -126,8 +126,8 @@
         <article class="pcard">
           <div class="pviz viz-big"><b>0</b><small>accounts required</small></div>
           <div>
-            <h3>Cloud is your call</h3>
-            <p>Want a bigger brain for cleanup? Point it at Bedrock, OpenAI, or Anthropic with your own key. Or keep it all local with llama.cpp.</p>
+            <h3>Cleanup is on device too</h3>
+            <p>By default, Apple Intelligence tidies your text on your Mac. Want a bigger brain? Point it at Bedrock, OpenAI, or Anthropic with your own key, or run your own model with llama.cpp.</p>
           </div>
         </article>
         <article class="pcard">
@@ -141,7 +141,7 @@
         </article>
         <article class="pcard">
           <div class="pviz viz-repo">
-            <div class="repo"><span class="repo-name">typewiser</span><span class="repo-tag">Apache-2.0</span><small>Swift · 140+ tests</small></div>
+            <div class="repo"><span class="repo-name">typewiser</span><span class="repo-tag">Apache-2.0</span><small>Swift · 200+ tests</small></div>
           </div>
           <div>
             <h3>Open source. Read every line.</h3>
@@ -170,7 +170,8 @@
             <li><span class="eng">whisper.cpp server</span><span class="tag">Self-hosted</span><span class="meta">Your own endpoint</span></li>
           </ul>
           <ul class="engine-list" data-list="llm" hidden>
-            <li class="on"><span class="eng">llama.cpp</span><span class="tag">Local</span><span class="meta">Gemma, speculative decoding</span></li>
+            <li class="on"><span class="eng">Apple Intelligence</span><span class="tag">On device</span><span class="meta">Default · no setup</span></li>
+            <li><span class="eng">llama.cpp</span><span class="tag">Local</span><span class="meta">Your own model</span></li>
             <li><span class="eng">AWS Bedrock</span><span class="tag">Cloud</span><span class="meta">Nova Lite</span></li>
             <li><span class="eng">OpenAI</span><span class="tag">Cloud</span><span class="meta">Chat Completions</span></li>
             <li><span class="eng">Anthropic</span><span class="tag">Cloud</span><span class="meta">Messages API</span></li>
@@ -264,7 +265,15 @@
         </details>
         <details>
           <summary>Do I need an account or subscription?</summary>
-          <p>No. TypeWiser is free and open source. Local mode costs nothing to run. Cloud cleanup bills against your own Bedrock, OpenAI, or Anthropic account.</p>
+          <p>No. TypeWiser is free and open source, and the default on-device mode costs nothing to run. Cloud cleanup bills against your own Bedrock, OpenAI, or Anthropic account.</p>
+        </details>
+        <details>
+          <summary>Do I need Apple Intelligence?</summary>
+          <p>No, but it helps. With Apple Intelligence on (macOS 26, Apple silicon), cleanup resolves self-corrections and fixes grammar, all on your Mac. Without it, TypeWiser still removes filler words and stutters and fixes capitalisation using built-in rules. For more than that, choose a local or cloud model in the menu.</p>
+        </details>
+        <details>
+          <summary>What does it ask for on first launch?</summary>
+          <p>Accessibility, Microphone, and Speech Recognition, each with a one-click button in the welcome window. It also checks that the 🌐 key isn’t opening the emoji picker. The window goes away once everything is set.</p>
         </details>
         <details>
           <summary>Which apps does it work with?</summary>
@@ -287,6 +296,10 @@
           <p>Choose a speech locale in Settings that matches how you speak, like English (India) or English (UK). It often makes a large difference over the system default.</p>
         </details>
         <details>
+          <summary>It hears me but types nothing with AirPods.</summary>
+          <p>Bluetooth headset mics send low-quality audio that Apple’s on-device recognizer often can’t transcribe. Switch the input to your Mac’s built-in microphone or a wired or USB mic in System Settings → Sound → Input.</p>
+        </details>
+        <details>
           <summary>Can I contribute?</summary>
           <p>Yes. It’s a Swift package with a fast test suite that never touches the network. Open an issue or a pull request on GitHub.</p>
         </details>
@@ -298,12 +311,18 @@
       <div class="cta">
         <img src="icon.png" alt="" width="64" height="64">
         <h2>Talk less like a robot. Type less, period.</h2>
-        <p>Build it from source in a minute. Native Swift, macOS 15 or later.</p>
-        <pre class="code"><code><span class="c"># one-time: a stable signing identity so permissions stick</span>
+        <p>Free. Signed and notarized by Apple. Updates itself.<br>macOS 15 or later, Apple silicon and Intel.</p>
+        <a class="btn" href="https://github.com/fabianferno/typewiser/releases/latest/download/TypeWiser.dmg">
+          <svg viewBox="0 0 384 512" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>
+          Download for Mac
+        </a>
+        <details class="from-source">
+          <summary>Or build it from source</summary>
+          <pre class="code"><code><span class="c"># one-time: a stable signing identity so permissions stick</span>
 ./Scripts/create-signing-cert.sh
 ./Scripts/bundle-app.sh
 open build/TypeWiser.app</code><button class="copy" type="button" aria-label="Copy commands">Copy</button></pre>
-        <a class="btn" href="https://github.com/fabianferno/typewiser">View on GitHub</a>
+        </details>
       </div>
     </section>
   </main>

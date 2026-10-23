@@ -1,9 +1,11 @@
 # Setup
 
-A from-scratch guide to running TypeWiser. The only hard requirement is a build
-of the app itself; **speech-to-text works out of the box** (Apple on-device), and
-the text-cleanup engine is your choice of Cloud (Bedrock) or a local llama.cpp
-server.
+A from-scratch guide to building TypeWiser from source. If you just want to use
+it, [download the DMG](https://github.com/fabianferno/typewiser/releases/latest/download/TypeWiser.dmg)
+instead.
+
+Both speech-to-text and cleanup **work out of the box**, on-device. Cloud and
+local llama.cpp cleanup are optional upgrades.
 
 ## 1. Prerequisites
 
@@ -51,6 +53,14 @@ Settings → **Engine** → *Transcribe with*:
 
 Cleanup (filler removal, grammar, name spelling) runs on an LLM. Pick the mode in
 the menu bar.
+
+### Default — On-device
+
+Nothing to set up. On macOS 26 with Apple Intelligence turned on (System
+Settings → Apple Intelligence & Siri), cleanup uses Apple's on-device model.
+Without it, built-in rules handle fillers, stutters, casing, and your name
+dictionary, but not self-corrections. Settings → Setup shows which one you're
+getting.
 
 ### Option A — Cloud (Bedrock, OpenAI, or Anthropic)
 

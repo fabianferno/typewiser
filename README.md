@@ -9,11 +9,21 @@ stop.
 Speech-to-text runs **on-device** by default via Apple's Speech framework — no
 server, no model download, and audio never leaves your Mac. You can instead point
 it at a self-hosted whisper.cpp server (Settings → Engine). Cleanup — filler
-removal, grammar, self-correction resolution, name spelling — runs on an LLM,
-either locally (llama.cpp) or in the cloud (AWS Bedrock, OpenAI, or Anthropic).
+removal, grammar, self-correction resolution, name spelling — runs on Apple
+Intelligence by default, also on-device, with built-in rules as the fallback on
+Macs without it. You can switch it to your own llama.cpp model or a cloud LLM
+(AWS Bedrock, OpenAI, or Anthropic).
 
-New here? See [`SETUP.md`](SETUP.md) for a from-scratch walkthrough, including the
-optional local llama.cpp rewrite engine.
+## Install
+
+Download the latest notarized build:
+[**TypeWiser.dmg**](https://github.com/fabianferno/typewiser/releases/latest/download/TypeWiser.dmg).
+It needs macOS 15 or later and runs on Apple silicon and Intel. It updates
+itself.
+
+On first launch a welcome window walks through the permissions. To build it
+yourself instead, read on. New here? See [`SETUP.md`](SETUP.md) for a
+from-scratch walkthrough, including the optional local llama.cpp rewrite engine.
 
 ## Build
 
@@ -23,7 +33,8 @@ open build/TypeWiser.app
 ```
 
 `bundle-app.sh` builds a release binary, assembles `build/TypeWiser.app`, and
-ad-hoc signs it. A `.app` bundle is required, not optional: macOS ties
+signs it for local use. Public builds are made with `./Scripts/release.sh` instead,
+which signs with Developer ID and notarizes; see [`RELEASING.md`](RELEASING.md). A `.app` bundle is required, not optional: macOS ties
 Accessibility and Microphone permission grants to a bundle ID plus a stable
 signature, which a bare `swift run` binary does not have — TCC will not
 persist a grant for it across relaunches.
@@ -74,6 +85,13 @@ This should not recur once you're signing with the certificate above.
 
 ## Engine modes
 
+- **On-device** (the default) uses Apple's on-device foundation model through
+  the FoundationModels framework, so it needs no download, no key, and no
+  network. It requires macOS 26 on Apple silicon with Apple Intelligence turned
+  on. Everywhere else — and whenever the model refuses, takes longer than 5s,
+  or returns something that isn't a rewrite — the built-in rules run instead.
+  The rules remove fillers and stutters, fix casing and punctuation, and apply
+  the name dictionary. They don't attempt self-corrections.
 - **Local** spawns `llama-server` on port `8231` running Gemma 26B A4B
   (`-c 4096`, speculative decoding via a draft model, no `--mmproj`). Model
   load takes 10–30s and holds ~17GB of RAM plus the GPU while active. The
@@ -125,7 +143,9 @@ VAD-segmented streaming endpoint — not anything the client can paper over.
 ## Tests
 
 ```bash
-swift test                                                  # 142 tests, no network/model deps (Keychain round-trip uses a throwaway service)
+swift test                                                  # 220+ tests, no network/model deps (Keychain round-trip uses a throwaway service)
+TYPEWISER_GOLDEN_ONDEVICE=1 swift test --filter goldenOnDevice  # opt-in: real Apple Intelligence model, free, needs it enabled
+TYPEWISER_ONDEVICE_LIVE=1 swift test --filter liveOnDeviceRewrite  # opt-in: one real Apple Intelligence rewrite
 TYPEWISER_INTEGRATION=1 swift test --filter wavEncoderRoundTripIsAcceptedByRealServer  # opt-in: real whisper.cpp server (set TYPEWISER_WHISPER_ENDPOINT, defaults to localhost:8080), needs `say`+`ffmpeg`
 TYPEWISER_GOLDEN_LOCAL=1 swift test --filter goldenLocal    # opt-in: needs llama-server up on :8231
 TYPEWISER_GOLDEN_BEDROCK=1 swift test --filter goldenBedrock  # opt-in: hits real Bedrock, costs money, creds from Keychain or env
@@ -146,6 +166,7 @@ See [`docs/manual-qa.md`](docs/manual-qa.md) for the checklist.
 
 - Setup (from scratch): [`SETUP.md`](SETUP.md)
 - Manual QA checklist: [`docs/manual-qa.md`](docs/manual-qa.md)
+- Cutting a release: [`RELEASING.md`](RELEASING.md)
 
 ## License
 

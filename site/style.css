@@ -294,6 +294,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .code .c { color: #7d8597; }
 .copy { position: absolute; top: 10px; right: 10px; border: 1px solid #2a2e38; background: #191c23; color: #c9cdd6; font-size: 12px; padding: 4px 10px; border-radius: 8px; }
 .copy:hover { background: #222631; }
+.from-source { width: min(560px, 100%); }
+.from-source summary { cursor: pointer; font-size: 14px; color: var(--muted); list-style: none; }
+.from-source summary::-webkit-details-marker { display: none; }
+.from-source summary:hover { color: var(--ink-2); }
+.from-source[open] summary { margin-bottom: 4px; }
 
 /* Footer */
 .footer { margin-top: 96px; border-top: 1px solid var(--line); padding: 48px 0 32px; }
