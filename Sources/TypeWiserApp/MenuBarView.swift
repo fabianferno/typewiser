@@ -4,10 +4,18 @@ import TypeWiserCore
 struct MenuBarView: View {
     @Bindable var model: AppModel
     @Environment(\.openSettings) private var openSettings
+    // Read via @AppStorage, not `model.settings`, so the menu re-renders when
+    // Settings changes the speech source. Keys must match `SettingsStore`.
+    @AppStorage("typewiser.sttSource") private var sttSourceRaw = STTSource.apple.rawValue
+    @AppStorage("typewiser.whisperEndpoint") private var whisperEndpoint = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Picker("Engine", selection: $model.mode) {
+            // Labelled "Cleanup" rather than "Engine": this only picks what
+            // polishes the transcript. Speech-to-text is a separate setting
+            // (shown below), and calling both "engine" made an On-device
+            // cleanup choice look like on-device transcription.
+            Picker("Cleanup", selection: $model.mode) {
                 Text("On-device").tag(EngineMode.onDevice)
                 Text("Local").tag(EngineMode.local)
                 Text("Cloud").tag(EngineMode.cloud)
@@ -15,6 +23,7 @@ struct MenuBarView: View {
             .pickerStyle(.segmented)
 
             Text(statusText).font(.caption).foregroundStyle(.secondary)
+            Text(speechText).font(.caption).foregroundStyle(.secondary)
 
             Divider()
 
@@ -76,6 +85,17 @@ struct MenuBarView: View {
     private func settingsWindow() -> NSWindow? {
         NSApp.windows.first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" }
             ?? NSApp.windows.first { $0.canBecomeKey && $0.isVisible && !($0 is NSPanel) }
+    }
+
+    /// Mirrors `TranscriberProvider.make`: Remote with no endpoint runs on
+    /// Apple, so say so rather than naming a server that isn't used.
+    private var speechText: String {
+        let endpoint = whisperEndpoint.trimmingCharacters(in: .whitespaces)
+        if STTSource(rawValue: sttSourceRaw) == .remote, !endpoint.isEmpty {
+            let host = URL(string: endpoint)?.host ?? endpoint
+            return "Speech · remote whisper.cpp (\(host)), on-device if it fails"
+        }
+        return "Speech · Apple on-device"
     }
 
     private var statusText: String {

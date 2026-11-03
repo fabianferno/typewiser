@@ -59,16 +59,20 @@ public final class TranscriberProvider: @unchecked Sendable {
     /// The name dictionary feeds both stages: `contextualStrings` here, so the
     /// recognizer is biased toward hearing the word at all, and the rewrite
     /// prompt later, so it is spelled the user's way once heard.
+    ///
+    /// Remote is wrapped in a `FallbackTranscriber` so a server that is down
+    /// degrades to on-device transcription instead of losing the recording.
     private static func make(_ sig: Signature) -> Transcribing {
+        let apple = AppleSpeechTranscriber(locale: Locale(identifier: sig.locale),
+                                           vocabulary: sig.vocabulary)
         switch sig.source {
         case .remote:
             if !sig.endpoint.isEmpty, let url = URL(string: sig.endpoint) {
-                return WhisperClient(endpoint: url)
+                return FallbackTranscriber(primary: WhisperClient(endpoint: url), fallback: apple)
             }
-            fallthrough
+            return apple
         case .apple:
-            return AppleSpeechTranscriber(locale: Locale(identifier: sig.locale),
-                                          vocabulary: sig.vocabulary)
+            return apple
         }
     }
 }

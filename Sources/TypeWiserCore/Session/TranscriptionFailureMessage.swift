@@ -32,6 +32,9 @@ public enum TranscriptionFailureMessage {
         Locale.current.localizedString(forIdentifier: locale) ?? locale
     }
 
+    private static let switchToApple =
+        "To transcribe on this Mac instead, set Settings → Engine → Transcribe with to Apple (on-device)."
+
     private static func generic(_ error: Error) -> String {
         switch error {
         case AppleSpeechError.notAuthorized:
@@ -42,6 +45,12 @@ public enum TranscriptionFailureMessage {
             return "Speech recognition is unavailable — the on-device model may still be downloading."
         case AppleSpeechError.cancelled, WhisperError.cancelled:
             return "Transcription cancelled."
+        case WhisperError.http(let code):
+            return "The whisper.cpp server returned an error (HTTP \(code)) — it may be down. \(switchToApple)"
+        case WhisperError.badPayload:
+            return "The whisper.cpp server sent back something that isn't a transcript — check the endpoint URL. \(switchToApple)"
+        case let urlError as URLError:
+            return "Couldn't reach the whisper.cpp server (\(urlError.localizedDescription)). \(switchToApple)"
         default:
             return "Transcription failed: \(error)"
         }

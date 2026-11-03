@@ -152,7 +152,7 @@ struct HUDView: View {
             return state.handsFree
                 ? "Press Fn to stop (text appears after ~3.5s)"
                 : "Listening… (text appears after ~3.5s)"
-        case .transcribing: return "Sending to Whisper…"
+        case .transcribing: return "Transcribing…"
         case .rewriting: return "Polishing…"
         case .inserted(let t): return t
         case .error(let e): return e

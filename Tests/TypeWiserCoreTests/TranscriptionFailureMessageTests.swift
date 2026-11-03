@@ -71,4 +71,19 @@ import Testing
         let text = TranscriptionFailureMessage.text(for: Odd(), input: builtIn)
         #expect(text.contains("Transcription failed"))
     }
+
+    /// Was rendered as "Transcription failed: http(502)".
+    @Test func serverErrorNamesTheServerAndTheOnDeviceFix() {
+        let text = TranscriptionFailureMessage.text(for: WhisperError.http(502), input: builtIn)
+        #expect(text.contains("whisper.cpp server"))
+        #expect(text.contains("502"))
+        #expect(text.contains("Apple (on-device)"))
+        #expect(!text.contains("http("), "the raw enum case must not reach the HUD")
+    }
+
+    @Test func unreachableServerSaysSo() {
+        let text = TranscriptionFailureMessage.text(for: URLError(.cannotConnectToHost), input: builtIn)
+        #expect(text.contains("Couldn't reach"))
+        #expect(text.contains("Apple (on-device)"))
+    }
 }
